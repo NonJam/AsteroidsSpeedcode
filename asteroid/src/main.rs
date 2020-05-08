@@ -14,6 +14,7 @@ struct Physics2D {
     speed: Option<f64>,
     angle: Option<f64>,
     accel: Option<f64>,
+    delete: bool
 }
 
 impl Physics2D {
@@ -37,6 +38,10 @@ impl Physics2D {
 
         self.x += self.dx;
         self.y += self.dy;
+
+        if self.x < -1000f64 || self.x > 2280f64 || self.y < -1000f64 || self.y > 1720f64 {
+            self.delete = true
+        }
     }
 
     fn get_angle_to(&self, x: f64, y: f64) -> f64 {
@@ -47,6 +52,12 @@ impl Physics2D {
         else {
             (result + 270f64) % 360f64
         }
+    }
+
+    fn collides_with(&self, other: &Physics2D) -> bool {
+        let dx = (self.x - other.x).abs();
+        let dy = (self.y - other.y).abs();
+        (dx * dx + dy * dy).sqrt() < self.r + other.r
     }
 }
 
@@ -60,7 +71,8 @@ impl Default for Physics2D {
             dy: 0f64,
             speed: None,
             angle: None,
-            accel: None
+            accel: None,
+            delete: false
         }
     }
 }
@@ -86,10 +98,23 @@ impl State for GameState {
         }
         for bullet in self.bullets.iter_mut() {
             bullet.apply_physics();
+
+            for asteroid in self.asteroids.iter_mut() {
+                if bullet.collides_with(asteroid) {
+                    asteroid.r = 0f64.max(asteroid.r - 2f64);
+                    if asteroid.r <= 0f64 {
+                        asteroid.delete = true
+                    }
+                    bullet.delete = true
+                }
+            }
         }
 
         wrap_bodies(&mut self.asteroids);
         wrap_body(&mut self.player);
+
+        self.asteroids.retain(|a| !a.delete);
+        self.bullets.retain(|b| !b.delete);
 
         Ok(())
     }
@@ -117,7 +142,7 @@ impl GameState {
         Ok(GameState {
             rand: rand::thread_rng(),
             asteroid_timer: 0,
-            asteroids: vec![],
+            asteroids: vec![Physics2D::new(500f64, 200f64, 300f64)],
             bullets: vec![],
             asteroid_tex: Texture::new(ctx, "asteroid.png")?,
             player: Physics2D::new(640f64, 360f64, 10f64),
@@ -193,12 +218,6 @@ fn main() -> tetra::Result {
         .show_mouse(true)
         .build()?
         .run(GameState::new)
-}
-
-fn overlaps(x1: f64, y1: f64, r1: f64, x2: f64, y2: f64, r2: f64) -> bool {
-    let dx = (x1 - x2).abs();
-    let dy = (y1 - y2).abs();
-    (dx * dx + dy * dy).sqrt() > r1 + r2
 }
 
 fn player_input(ctx: &mut Context, player: &mut Physics2D, bullets: &mut Vec<Physics2D>) {
