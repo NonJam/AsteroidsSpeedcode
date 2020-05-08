@@ -134,6 +134,7 @@ impl State for GameState {
         if self.game_over {
             self.asteroids.clear();
             self.bullets.clear();
+            return Ok(());
         }
         
         wrap_bodies(&mut self.asteroids);
