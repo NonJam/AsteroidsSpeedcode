@@ -1,5 +1,5 @@
 use tetra::graphics::{self, Color, Texture};
-use tetra::{Context, ContextBuilder, State, input::{self, Key, MouseButton}};
+use tetra::{Context, ContextBuilder, State, input::{self, Key, MouseButton, get_mouse_position }};
 use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 
@@ -30,11 +30,21 @@ impl Physics2D {
             }
 
             self.dx = angle.to_radians().sin() * speed;
-            self.dy = angle.to_radians().cos() * speed;
+            self.dy = -angle.to_radians().cos() * speed;
         }
 
         self.x += self.dx;
         self.y += self.dy;
+    }
+
+    fn get_angle_to(&self, x: f64, y: f64) -> f64 {
+        let result = (self.y - y).to_radians().atan2((self.x - x).to_radians()).to_degrees();
+        if result < 0f64 {
+            (result + 630f64) % 360f64
+        }
+        else {
+            (result + 270f64) % 360f64
+        }
     }
 }
 
@@ -56,13 +66,30 @@ impl Default for Physics2D {
 struct GameState {
     asteroid_tex: Texture,
     asteroids: Vec<Physics2D>,
+    bullets: Vec<Physics2D>,
     player: Physics2D,
 }
 
 impl State for GameState {
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
+        if input::is_mouse_button_down(ctx, MouseButton::Left) {
+            let pos = get_mouse_position(ctx);
+            let angle = self.player.get_angle_to(pos.x as f64, pos.y as f64);
+            self.bullets.push(Physics2D {
+                x: self.player.x, 
+                y: self.player.y,
+                r: 6f64,
+                speed: Some(10f64),
+                accel: Some(1f64),
+                angle: Some(angle),
+                ..Physics2D::default()
+            });
+        }
         for asteroid in self.asteroids.iter_mut() {
             asteroid.apply_physics();
+        }
+        for bullet in self.bullets.iter_mut() {
+            bullet.apply_physics();
         }
 
         player_input(ctx, &mut self.player);
@@ -79,6 +106,10 @@ impl State for GameState {
             self.draw_asteroid(ctx, ast.x, ast.y, ast.r);
         }
 
+        for bullet in self.bullets.iter() {
+            self.draw_asteroid(ctx, bullet.x, bullet.y, bullet.r);
+        }
+
         self.draw_asteroid(ctx, self.player.x, self.player.y, self.player.r);
 
         Ok(())
@@ -89,6 +120,7 @@ impl GameState {
     fn new(ctx: &mut Context) -> tetra::Result<GameState> {
         Ok(GameState {
             asteroids: vec![],
+            bullets: vec![],
             asteroid_tex: Texture::new(ctx, "asteroid.png")?,
             player: Physics2D::new(800f64, 400f64, 10f64),
         })
@@ -109,9 +141,10 @@ impl GameState {
 }
 
 fn main() -> tetra::Result {
-  ContextBuilder::new("Hello, world!", 1280, 720)
-      .build()?
-      .run(GameState::new)
+    ContextBuilder::new("Hello, world!", 1280, 720)
+        .show_mouse(true)
+        .build()?
+        .run(GameState::new)
 }
 
 fn overlaps(x1: f64, y1: f64, r1: f64, x2: f64, y2: f64, r2: f64) -> bool {
