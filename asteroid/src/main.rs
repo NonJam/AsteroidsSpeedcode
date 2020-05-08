@@ -1,5 +1,7 @@
 use tetra::graphics::{self, Color, Texture};
-use tetra::{Context, ContextBuilder, State};
+use tetra::{Context, ContextBuilder, State, input::{self, Key}};
+use tetra::math::Vec2;
+use tetra::graphics::DrawParams;
 
 struct Physics2D {
     x: f64,
@@ -53,7 +55,8 @@ impl Default for Physics2D {
 
 struct GameState {
     asteroid_tex: Texture,
-    asteroids: Vec<Physics2D>
+    asteroids: Vec<Physics2D>,
+    player: Physics2D,
 }
 
 impl State for GameState {
@@ -61,6 +64,10 @@ impl State for GameState {
         for asteroid in self.asteroids.iter_mut() {
             asteroid.apply_physics();
         }
+
+        player_input(ctx, &mut self.player);
+        self.player.apply_physics();
+
         Ok(())
     }
 
@@ -72,6 +79,8 @@ impl State for GameState {
             self.draw_asteroid(ctx, ast.x, ast.y, ast.r);
         }
 
+        self.draw_asteroid(ctx, self.player.x, self.player.y, self.player.r);
+
         Ok(())
     }
 }
@@ -81,6 +90,7 @@ impl GameState {
         Ok(GameState {
             asteroids: vec![],
             asteroid_tex: Texture::new(ctx, "asteroid.png")?,
+            player: Physics2D::new(800f64, 400f64, 10f64),
         })
     }
 
@@ -88,8 +98,6 @@ impl GameState {
     /// 
     /// self.draw_asteroid(ctx, 500f64, 500f64, 100f64);
     fn draw_asteroid(&self, ctx: &mut Context, x: f64, y: f64, r: f64) {
-        use tetra::math::Vec2;
-        use tetra::graphics::DrawParams;
         let scale = r / 1024f64;
         let params = DrawParams::new()
             .position(Vec2::new(x as f32, y as f32))
@@ -110,4 +118,29 @@ fn overlaps(x1: f64, y1: f64, r1: f64, x2: f64, y2: f64, r2: f64) -> bool {
     let dx = (x1 - x2).abs();
     let dy = (y1 - y2).abs();
     (dx * dx + dy * dy).sqrt() > r1 + r2
+}
+
+fn player_input(ctx: &mut Context, player: &mut Physics2D) {
+    let mut input = Vec2::<i32>::default();
+    if input::is_key_down(ctx, Key::A) {
+        input.x -= 1;
+    }
+    if input::is_key_down(ctx, Key::D) {
+        input.x += 1;
+    }
+    if input::is_key_down(ctx, Key::W) {
+        input.y -= 1;
+    }
+    if input::is_key_down(ctx, Key::S) {
+        input.y += 1;
+    }
+
+    let mut input = Vec2::new(input.x as f64, input.y as f64);
+    if input != Vec2::new(0f64, 0f64) {
+        input.normalize();
+        input = input * 5f64;
+    }
+
+    player.dx = input.x;
+    player.dy = input.y;
 }
