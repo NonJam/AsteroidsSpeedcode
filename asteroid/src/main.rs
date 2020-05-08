@@ -78,6 +78,7 @@ impl Default for Physics2D {
 }
 
 struct GameState {
+    game_over: bool,
     rand: ThreadRng,
     asteroid_timer: i32,
     asteroid_tex: Texture,
@@ -88,6 +89,14 @@ struct GameState {
 
 impl State for GameState {
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
+        if self.game_over {
+            if input::is_key_down(ctx, Key::Space) {
+                self.reset_state();
+            }
+
+            return Ok(());
+        }
+
         player_input(ctx, &mut self.player, &mut self.bullets);
         self.player.apply_physics();
 
@@ -110,6 +119,16 @@ impl State for GameState {
             }
         }
 
+        for asteroid in self.asteroids.iter() {
+            if self.player.collides_with(asteroid) {
+                self.game_over = true;
+            }
+        }
+        if self.game_over {
+            self.asteroids.clear();
+            self.bullets.clear();
+        }
+        
         wrap_bodies(&mut self.asteroids);
         wrap_body(&mut self.player);
 
@@ -140,9 +159,10 @@ impl State for GameState {
 impl GameState {
     fn new(ctx: &mut Context) -> tetra::Result<GameState> {
         Ok(GameState {
+            game_over: false,
             rand: rand::thread_rng(),
             asteroid_timer: 0,
-            asteroids: vec![Physics2D::new(500f64, 200f64, 300f64)],
+            asteroids: vec![],
             bullets: vec![],
             asteroid_tex: Texture::new(ctx, "asteroid.png")?,
             player: Physics2D::new(640f64, 360f64, 10f64),
@@ -210,6 +230,14 @@ impl GameState {
 
             self.asteroids.push(ast);
         }
+    }
+
+    fn reset_state(&mut self) {
+        self.game_over = false;
+        self.asteroid_timer = 0;
+        self.asteroids = vec![];
+        self.bullets = vec![];
+        self.player = Physics2D::new(640f64, 360f64, 10f64);
     }
 }
 
