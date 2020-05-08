@@ -1,5 +1,5 @@
 use tetra::graphics::{self, Color, Texture};
-use tetra::{Context, ContextBuilder, State, input::{self, Key}};
+use tetra::{Context, ContextBuilder, State, input::{self, Key, MouseButton}};
 use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 
