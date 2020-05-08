@@ -24,3 +24,9 @@ fn main() -> tetra::Result {
       .build()?
       .run(|_| Ok(GameState))
 }
+
+fn overlaps(x1: f64, y1: f64, r1: f64, x2: f64, y2: f64, r2: f64) -> bool {
+    let dx = (x1 - x2).abs();
+    let dy = (y1 - y2).abs();
+    (dx * dx + dy * dy).sqrt() > r1 + r2
+}
