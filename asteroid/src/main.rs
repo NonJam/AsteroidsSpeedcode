@@ -3,6 +3,8 @@ use tetra::{Context, ContextBuilder, State, input::{self, Key, MouseButton, get_
 use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 
+use rand::prelude::*;
+
 struct Physics2D {
     x: f64,
     y: f64,
@@ -64,6 +66,8 @@ impl Default for Physics2D {
 }
 
 struct GameState {
+    rand: ThreadRng,
+    asteroid_timer: i32,
     asteroid_tex: Texture,
     asteroids: Vec<Physics2D>,
     bullets: Vec<Physics2D>,
@@ -72,19 +76,11 @@ struct GameState {
 
 impl State for GameState {
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
-        if input::is_mouse_button_down(ctx, MouseButton::Left) {
-            let pos = get_mouse_position(ctx);
-            let angle = self.player.get_angle_to(pos.x as f64, pos.y as f64);
-            self.bullets.push(Physics2D {
-                x: self.player.x, 
-                y: self.player.y,
-                r: 6f64,
-                speed: Some(10f64),
-                accel: Some(1f64),
-                angle: Some(angle),
-                ..Physics2D::default()
-            });
-        }
+        player_input(ctx, &mut self.player, &mut self.bullets);
+        self.player.apply_physics();
+
+        self.asteroid_spawning();
+
         for asteroid in self.asteroids.iter_mut() {
             asteroid.apply_physics();
         }
@@ -92,8 +88,8 @@ impl State for GameState {
             bullet.apply_physics();
         }
 
-        player_input(ctx, &mut self.player);
-        self.player.apply_physics();
+        wrap_bodies(&mut self.asteroids);
+        wrap_body(&mut self.player);
 
         Ok(())
     }
@@ -119,10 +115,12 @@ impl State for GameState {
 impl GameState {
     fn new(ctx: &mut Context) -> tetra::Result<GameState> {
         Ok(GameState {
+            rand: rand::thread_rng(),
+            asteroid_timer: 0,
             asteroids: vec![],
             bullets: vec![],
             asteroid_tex: Texture::new(ctx, "asteroid.png")?,
-            player: Physics2D::new(800f64, 400f64, 10f64),
+            player: Physics2D::new(640f64, 360f64, 10f64),
         })
     }
 
@@ -137,6 +135,56 @@ impl GameState {
             .origin(Vec2::new(512f32, 512f32));
     
         graphics::draw(ctx, &self.asteroid_tex, params);
+    }
+
+    fn asteroid_spawning(&mut self) {
+        self.asteroid_timer += 1;
+        while self.asteroid_timer > 50 {
+            self.asteroid_timer -= 50;
+
+            // Timer proc
+            let (x, y) = {
+                let x: i32;
+                let y: i32;
+
+                // Align vertically
+                if rand::random() {
+                    // Left
+                    if rand::random() {
+                        x = 0;
+                    }
+                    // Right 
+                    else {
+                        x = 1279;
+                    }
+
+                    y = self.rand.gen_range(0, 720);
+                } 
+                // Align horizontally
+                else {
+                    // Top
+                    if rand::random() {
+                        y = 0;
+                    }
+                    // Bottom
+                    else {
+                        y = 719;
+                    }
+
+                    x = self.rand.gen_range(0, 1280);
+                }
+
+                (x, y)
+            };
+
+            let mut ast = Physics2D::new(x as f64, y as f64, self.rand.gen_range(20f64, 200f64));
+            let mut angle = ast.get_angle_to(640f64, 360f64);
+            angle += self.rand.gen_range(-22f64, 22f64);
+            ast.angle = Some(angle);
+            ast.speed = Some(self.rand.gen_range(5f64, 10f64));
+
+            self.asteroids.push(ast);
+        }
     }
 }
 
@@ -153,7 +201,7 @@ fn overlaps(x1: f64, y1: f64, r1: f64, x2: f64, y2: f64, r2: f64) -> bool {
     (dx * dx + dy * dy).sqrt() > r1 + r2
 }
 
-fn player_input(ctx: &mut Context, player: &mut Physics2D) {
+fn player_input(ctx: &mut Context, player: &mut Physics2D, bullets: &mut Vec<Physics2D>) {
     let mut input = Vec2::<i32>::default();
     if input::is_key_down(ctx, Key::A) {
         input.x -= 1;
@@ -176,4 +224,41 @@ fn player_input(ctx: &mut Context, player: &mut Physics2D) {
 
     player.dx = input.x;
     player.dy = input.y;
+
+
+    if input::is_mouse_button_down(ctx, MouseButton::Left) {
+        let pos = get_mouse_position(ctx);
+        let angle = player.get_angle_to(pos.x as f64, pos.y as f64);
+        bullets.push(Physics2D {
+            x: player.x, 
+            y: player.y,
+            r: 6f64,
+            speed: Some(10f64),
+            accel: Some(1f64),
+            angle: Some(angle),
+            ..Physics2D::default()
+        });
+    }
+}
+
+fn wrap_bodies(bodies: &mut Vec<Physics2D>) {
+    for body in bodies.iter_mut() {
+        wrap_body(body);
+    }
+}
+
+fn wrap_body(body: &mut Physics2D) {
+    if body.x > 1280f64 + body.r {
+        body.x = -(body.x - 1280f64);
+    }
+    else if body.x < -body.r {
+        body.x = 1280f64 + (-body.x);
+    }
+
+    if body.y > 720f64 + body.r {
+        body.y = -(body.y - 720f64);
+    }
+    else if body.y < 0f64 - body.r {
+        body.y = 720f64 + (-body.y);
+    }
 }
