@@ -105,14 +105,21 @@ impl State for GameState {
         for asteroid in self.asteroids.iter_mut() {
             asteroid.apply_physics();
         }
+        let mut new_asteroids : Vec<Physics2D> = vec![];
         for bullet in self.bullets.iter_mut() {
             bullet.apply_physics();
 
             for asteroid in self.asteroids.iter_mut() {
                 if bullet.collides_with(asteroid) {
-                    asteroid.r = 0f64.max(asteroid.r - 2f64);
-                    if asteroid.r <= 0f64 {
+                    asteroid.r = asteroid.r / 1.5f64;
+                    if asteroid.r < 15f64 {
                         asteroid.delete = true
+                    }
+                    else {
+                        let mut new_asteroid = Physics2D { ..*asteroid };
+                        asteroid.angle = Some(bullet.angle.unwrap() - self.rand.gen_range(0f64,140f64));
+                        new_asteroid.angle = Some(bullet.angle.unwrap() + self.rand.gen_range(0f64,140f64));
+                        new_asteroids.push(new_asteroid);
                     }
                     bullet.delete = true
                 }
@@ -133,6 +140,7 @@ impl State for GameState {
         wrap_body(&mut self.player);
 
         self.asteroids.retain(|a| !a.delete);
+        self.asteroids.extend(new_asteroids);
         self.bullets.retain(|b| !b.delete);
 
         Ok(())
