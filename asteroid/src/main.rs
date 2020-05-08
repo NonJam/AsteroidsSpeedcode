@@ -128,7 +128,7 @@ impl GameState {
     /// 
     /// self.draw_asteroid(ctx, 500f64, 500f64, 100f64);
     fn draw_asteroid(&self, ctx: &mut Context, x: f64, y: f64, r: f64) {
-        let scale = r / 1024f64;
+        let scale = (r / 1024f64) * 2f64;
         let params = DrawParams::new()
             .position(Vec2::new(x as f32, y as f32))
             .scale(Vec2::new(scale as f32, scale as f32))
@@ -177,7 +177,7 @@ impl GameState {
                 (x, y)
             };
 
-            let mut ast = Physics2D::new(x as f64, y as f64, self.rand.gen_range(20f64, 200f64));
+            let mut ast = Physics2D::new(x as f64, y as f64, self.rand.gen_range(10f64, 100f64));
             let mut angle = ast.get_angle_to(640f64, 360f64);
             angle += self.rand.gen_range(-22f64, 22f64);
             ast.angle = Some(angle);
