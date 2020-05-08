@@ -1,9 +1,16 @@
 use tetra::graphics::{self, Color, Texture};
-use tetra::{Context, ContextBuilder, State, input::{self, Key, MouseButton, get_mouse_position }};
+use tetra::{Context, ContextBuilder, State, Trans, Result, input::{self, Key, MouseButton, get_mouse_position }};
 use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 
 use rand::prelude::*;
+
+fn main() -> tetra::Result {
+    ContextBuilder::new("Hello, world!", 1280, 720)
+        .show_mouse(true)
+        .build()?
+        .run(GameState::new)
+}
 
 struct Physics2D {
     x: f64,
@@ -88,15 +95,7 @@ struct GameState {
 }
 
 impl State for GameState {
-    fn update(&mut self, ctx: &mut Context) -> tetra::Result {
-        if self.game_over {
-            if input::is_key_down(ctx, Key::Space) {
-                self.reset_state();
-            }
-
-            return Ok(());
-        }
-
+    fn update(&mut self, ctx: &mut Context) -> Result<Trans> {
         player_input(ctx, &mut self.player, &mut self.bullets);
         self.player.apply_physics();
 
@@ -128,13 +127,8 @@ impl State for GameState {
 
         for asteroid in self.asteroids.iter() {
             if self.player.collides_with(asteroid) {
-                self.game_over = true;
+                return Ok(Trans::Switch(Box::new(DeadState)));
             }
-        }
-        if self.game_over {
-            self.asteroids.clear();
-            self.bullets.clear();
-            return Ok(());
         }
         
         wrap_bodies(&mut self.asteroids);
@@ -144,7 +138,7 @@ impl State for GameState {
         self.asteroids.extend(new_asteroids);
         self.bullets.retain(|b| !b.delete);
 
-        Ok(())
+        Ok(Trans::None)
     }
 
     fn draw(&mut self, ctx: &mut Context) -> tetra::Result {
@@ -240,21 +234,24 @@ impl GameState {
             self.asteroids.push(ast);
         }
     }
-
-    fn reset_state(&mut self) {
-        self.game_over = false;
-        self.asteroid_timer = 0;
-        self.asteroids = vec![];
-        self.bullets = vec![];
-        self.player = Physics2D::new(640f64, 360f64, 10f64);
-    }
 }
 
-fn main() -> tetra::Result {
-    ContextBuilder::new("Hello, world!", 1280, 720)
-        .show_mouse(true)
-        .build()?
-        .run(GameState::new)
+struct DeadState;
+
+impl State for DeadState {
+    fn update(&mut self, ctx: &mut Context) -> Result<Trans> {
+        if input::is_key_down(ctx, Key::Space) {
+            return Ok(Trans::Switch(Box::new(GameState::new(ctx)?)));
+        }
+
+        Ok(Trans::None)
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> Result {
+        graphics::clear(ctx, Color::rgb(0.45, 0.65, 1.0));    
+
+        Ok(())
+    }
 }
 
 fn player_input(ctx: &mut Context, player: &mut Physics2D, bullets: &mut Vec<Physics2D>) {
