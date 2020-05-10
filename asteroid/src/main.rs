@@ -9,7 +9,19 @@ fn main() -> tetra::Result {
     ContextBuilder::new("Hello, world!", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new)
+        .run(GameState::new, Resources::new)
+}
+
+struct Resources {
+    asteroid_tex: Texture,
+}
+
+impl Resources {
+    fn new(ctx: &mut Context) -> tetra::Result<Self> {
+        Ok(Resources {
+            asteroid_tex: Texture::new(ctx, "asteroid.png")?, 
+        })
+    }
 }
 
 struct Physics2D {
@@ -85,17 +97,15 @@ impl Default for Physics2D {
 }
 
 struct GameState {
-    game_over: bool,
     rand: ThreadRng,
     asteroid_timer: i32,
-    asteroid_tex: Texture,
     asteroids: Vec<Physics2D>,
     bullets: Vec<Physics2D>,
     player: Physics2D,
 }
 
-impl State for GameState {
-    fn update(&mut self, ctx: &mut Context) -> Result<Trans> {
+impl State<Resources> for GameState {
+    fn update(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result<Trans<Resources>> {
         player_input(ctx, &mut self.player, &mut self.bullets);
         self.player.apply_physics();
 
@@ -141,33 +151,31 @@ impl State for GameState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> tetra::Result {
+    fn draw(&mut self, ctx: &mut Context, resources: &mut Resources) -> tetra::Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
 
         for ast in self.asteroids.iter() {
-            self.draw_asteroid(ctx, ast.x, ast.y, ast.r);
+            self.draw_asteroid(ctx, resources, ast.x, ast.y, ast.r);
         }
 
         for bullet in self.bullets.iter() {
-            self.draw_asteroid(ctx, bullet.x, bullet.y, bullet.r);
+            self.draw_asteroid(ctx, resources, bullet.x, bullet.y, bullet.r);
         }
 
-        self.draw_asteroid(ctx, self.player.x, self.player.y, self.player.r);
+        self.draw_asteroid(ctx, resources, self.player.x, self.player.y, self.player.r);
 
         Ok(())
     }
 }
 
 impl GameState {
-    fn new(ctx: &mut Context) -> tetra::Result<GameState> {
+    fn new(_ctx: &mut Context) -> tetra::Result<GameState> {
         Ok(GameState {
-            game_over: false,
             rand: rand::thread_rng(),
             asteroid_timer: 0,
             asteroids: vec![],
             bullets: vec![],
-            asteroid_tex: Texture::new(ctx, "asteroid.png")?,
             player: Physics2D::new(640f64, 360f64, 10f64),
         })
     }
@@ -175,14 +183,14 @@ impl GameState {
     /// # This draws an asteroid at position 500,500 that has a radius of 100
     /// 
     /// self.draw_asteroid(ctx, 500f64, 500f64, 100f64);
-    fn draw_asteroid(&self, ctx: &mut Context, x: f64, y: f64, r: f64) {
+    fn draw_asteroid(&self, ctx: &mut Context, resources: &mut Resources, x: f64, y: f64, r: f64) {
         let scale = (r / 1024f64) * 2f64;
         let params = DrawParams::new()
             .position(Vec2::new(x as f32, y as f32))
             .scale(Vec2::new(scale as f32, scale as f32))
             .origin(Vec2::new(512f32, 512f32));
     
-        graphics::draw(ctx, &self.asteroid_tex, params);
+        graphics::draw(ctx, &resources.asteroid_tex, params);
     }
 
     fn asteroid_spawning(&mut self) {
@@ -238,8 +246,8 @@ impl GameState {
 
 struct DeadState;
 
-impl State for DeadState {
-    fn update(&mut self, ctx: &mut Context) -> Result<Trans> {
+impl State<Resources> for DeadState {
+    fn update(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result<Trans<Resources>> {
         if input::is_key_down(ctx, Key::Space) {
             return Ok(Trans::Switch(Box::new(GameState::new(ctx)?)));
         }
@@ -247,7 +255,7 @@ impl State for DeadState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> Result {
+    fn draw(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result {
         graphics::clear(ctx, Color::rgb(0.45, 0.65, 1.0));    
 
         Ok(())
