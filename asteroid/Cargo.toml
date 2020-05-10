@@ -1,11 +1,12 @@
 [package]
 name = "asteroid"
 version = "0.1.0"
-authors = ["Eva Wong <suddenlyeva@gmail.com>"]
+authors = ["Eva Wong <suddenlyeva@gmail.com>, Ellen Nyan <supbscripter@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tetra = { path = "../tetra"}
+tetra = { path = "../tetra" }
+legion = { path = "../legion" }
 rand = "0.7.3"

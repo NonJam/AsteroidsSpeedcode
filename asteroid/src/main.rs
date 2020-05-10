@@ -2,6 +2,7 @@ use tetra::graphics::{self, Color, Texture};
 use tetra::{Context, ContextBuilder, State, Trans, Result, input::{self, Key, MouseButton, get_mouse_position }};
 use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
+use legion::prelude::*;
 
 use rand::prelude::*;
 
@@ -9,17 +10,24 @@ fn main() -> tetra::Result {
     ContextBuilder::new("Hello, world!", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new, Resources::new)
+        .run(GameState::new, |ctx| { 
+            let mut res = Resources::default();
+            res.insert(Textures::new(ctx)?); 
+            Ok(res)
+        })
 }
 
-struct Resources {
-    asteroid_tex: Texture,
+unsafe impl Send for Textures {}
+unsafe impl Sync for Textures {}
+
+struct Textures {
+    asteroid: Texture,
 }
 
-impl Resources {
-    fn new(ctx: &mut Context) -> tetra::Result<Self> {
-        Ok(Resources {
-            asteroid_tex: Texture::new(ctx, "asteroid.png")?, 
+impl Textures {
+    fn new(ctx: &mut Context) -> Result<Self> {
+        Ok(Textures {
+            asteroid: Texture::new(ctx, "asteroid.png")?,
         })
     }
 }
@@ -190,7 +198,7 @@ impl GameState {
             .scale(Vec2::new(scale as f32, scale as f32))
             .origin(Vec2::new(512f32, 512f32));
     
-        graphics::draw(ctx, &resources.asteroid_tex, params);
+        graphics::draw(ctx, &resources.get::<Textures>().unwrap().asteroid, params);
     }
 
     fn asteroid_spawning(&mut self) {
@@ -199,41 +207,42 @@ impl GameState {
             self.asteroid_timer -= 50;
 
             // Timer proc
+            let radius = self.rand.gen_range(10f64, 100f64);
             let (x, y) = {
-                let x: i32;
-                let y: i32;
+                let x: f64;
+                let y: f64;
 
                 // Align vertically
                 if rand::random() {
                     // Left
                     if rand::random() {
-                        x = 0;
+                        x = 0f64 - radius;
                     }
                     // Right 
                     else {
-                        x = 1279;
+                        x = 1279f64 + radius;
                     }
 
-                    y = self.rand.gen_range(0, 720);
+                    y = self.rand.gen_range(0f64 - radius, 720f64 + radius);
                 } 
                 // Align horizontally
                 else {
                     // Top
                     if rand::random() {
-                        y = 0;
+                        y = 0f64 - radius;
                     }
                     // Bottom
                     else {
-                        y = 719;
+                        y = 719f64 + radius;
                     }
 
-                    x = self.rand.gen_range(0, 1280);
+                    x = self.rand.gen_range(0f64 - radius, 1280f64 + radius);
                 }
 
                 (x, y)
             };
 
-            let mut ast = Physics2D::new(x as f64, y as f64, self.rand.gen_range(10f64, 100f64));
+            let mut ast = Physics2D::new(x as f64, y as f64, radius);
             let mut angle = ast.get_angle_to(640f64, 360f64);
             angle += self.rand.gen_range(-22f64, 22f64);
             ast.angle = Some(angle);

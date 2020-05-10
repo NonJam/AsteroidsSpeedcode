@@ -1,7 +1,8 @@
 [workspace]
 members = [ 
-    "asteroid"
+    "asteroid",
 ]
 exclude = [
-    "tetra"
+    "tetra",
+    "legion",
 ]
