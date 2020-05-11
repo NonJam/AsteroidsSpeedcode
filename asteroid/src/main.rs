@@ -6,19 +6,17 @@ use legion::prelude::*;
 
 use rand::prelude::*;
 
+type Res = (Resources, Textures);
+
 fn main() -> tetra::Result {
-    ContextBuilder::new("Hello, world!", 1280, 720)
+    ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
         .run(GameState::new, |ctx| { 
-            let mut res = Resources::default();
-            res.insert(Textures::new(ctx)?); 
-            Ok(res)
+            let res = Resources::default();
+            Ok((res, Textures::new(ctx)?))
         })
 }
-
-unsafe impl Send for Textures {}
-unsafe impl Sync for Textures {}
 
 struct Textures {
     asteroid: Texture,
@@ -112,8 +110,8 @@ struct GameState {
     player: Physics2D,
 }
 
-impl State<Resources> for GameState {
-    fn update(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result<Trans<Resources>> {
+impl State<Res> for GameState {
+    fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
         player_input(ctx, &mut self.player, &mut self.bullets);
         self.player.apply_physics();
 
@@ -159,7 +157,7 @@ impl State<Resources> for GameState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context, resources: &mut Resources) -> tetra::Result {
+    fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> tetra::Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
 
@@ -191,14 +189,14 @@ impl GameState {
     /// # This draws an asteroid at position 500,500 that has a radius of 100
     /// 
     /// self.draw_asteroid(ctx, 500f64, 500f64, 100f64);
-    fn draw_asteroid(&self, ctx: &mut Context, resources: &mut Resources, x: f64, y: f64, r: f64) {
+    fn draw_asteroid(&self, ctx: &mut Context, resources: &mut Res, x: f64, y: f64, r: f64) {
         let scale = (r / 1024f64) * 2f64;
         let params = DrawParams::new()
             .position(Vec2::new(x as f32, y as f32))
             .scale(Vec2::new(scale as f32, scale as f32))
             .origin(Vec2::new(512f32, 512f32));
     
-        graphics::draw(ctx, &resources.get::<Textures>().unwrap().asteroid, params);
+        graphics::draw(ctx, &resources.1.asteroid, params);
     }
 
     fn asteroid_spawning(&mut self) {
@@ -255,8 +253,8 @@ impl GameState {
 
 struct DeadState;
 
-impl State<Resources> for DeadState {
-    fn update(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result<Trans<Resources>> {
+impl State<Res> for DeadState {
+    fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
         if input::is_key_down(ctx, Key::Space) {
             return Ok(Trans::Switch(Box::new(GameState::new(ctx)?)));
         }
@@ -264,7 +262,7 @@ impl State<Resources> for DeadState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context, _resources: &mut Resources) -> Result {
+    fn draw(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result {
         graphics::clear(ctx, Color::rgb(0.45, 0.65, 1.0));    
 
         Ok(())
