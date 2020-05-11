@@ -238,11 +238,16 @@ impl GameState {
     fn destroy_offscreen(&mut self) {
         let query = <(Read<Transform>,)>::query();
 
-        for (entity,(transform,)) in query.iter_entities(&self.world) {
+        let mut add_tag = vec![];
 
+        for (entity,(transform,)) in query.iter_entities(&self.world) {
             if transform.x < -1000f64 || transform.x > 2280f64 || transform.y < -1000f64 || transform.y > 1720f64 {
-                self.world.add_tag(entity, Delete);
+                add_tag.push(entity)
             }
+        }
+
+        for data in add_tag.into_iter() {
+            self.world.add_tag(data, Delete);
         }
     }
 
