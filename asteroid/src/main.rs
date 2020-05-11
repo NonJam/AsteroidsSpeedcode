@@ -85,6 +85,8 @@ impl GameState {
     fn handle_input(&mut self, ctx: &Context) {
         let query = <(Write<Transform>, Tagged<Player>)>::query();
         
+        let mut create_bullets = vec![];
+
         for (mut player, _) in query.iter_mut(&mut self.world) {
 
             // Movement
@@ -107,7 +109,7 @@ impl GameState {
                 let pos = get_mouse_position(ctx);
                 let angle = player.get_angle_to(pos.x as f64, pos.y as f64);
 
-                self.create_bullet(
+                create_bullets.push((
                     Transform {
                         x: player.x,
                         y: player.y,
@@ -120,8 +122,12 @@ impl GameState {
                         angle,
                         ..Physics::default() 
                     },
-                );
+                ));
             }
+        }
+
+        for data in create_bullets.into_iter() {
+            self.create_bullet(data.0, data.1);
         }
     }
 
