@@ -6,6 +6,9 @@ use legion::prelude::*;
 
 use rand::prelude::*;
 
+mod components;
+use components::*;
+
 type Res = (Resources, Textures);
 
 fn main() -> tetra::Result {
@@ -30,146 +33,34 @@ impl Textures {
     }
 }
 
-struct Physics2D {
-    x: f64,
-    y: f64,
-    r: f64,
-    dx: f64,
-    dy: f64,
-    speed: Option<f64>,
-    angle: Option<f64>,
-    accel: Option<f64>,
-    delete: bool
-}
-
-impl Physics2D {
-    fn new(x: f64, y: f64, radius: f64) -> Self {
-        let mut blah = Physics2D::default();
-        blah.x = x;
-        blah.y = y;
-        blah.r = radius;
-        blah
-    }
-
-    fn apply_physics(&mut self) {
-        if let (Some(speed), Some(angle)) = (self.speed, self.angle) {
-            if let Some(accel) = self.accel {
-                self.speed = Some(speed + accel)
-            }
-
-            self.dx = angle.to_radians().sin() * speed;
-            self.dy = -angle.to_radians().cos() * speed;
-        }
-
-        self.x += self.dx;
-        self.y += self.dy;
-
-        if self.x < -1000f64 || self.x > 2280f64 || self.y < -1000f64 || self.y > 1720f64 {
-            self.delete = true
-        }
-    }
-
-    fn get_angle_to(&self, x: f64, y: f64) -> f64 {
-        let result = (self.y - y).to_radians().atan2((self.x - x).to_radians()).to_degrees();
-        if result < 0f64 {
-            (result + 630f64) % 360f64
-        }
-        else {
-            (result + 270f64) % 360f64
-        }
-    }
-
-    fn collides_with(&self, other: &Physics2D) -> bool {
-        let dx = (self.x - other.x).abs();
-        let dy = (self.y - other.y).abs();
-        (dx * dx + dy * dy).sqrt() < self.r + other.r
-    }
-}
-
-impl Default for Physics2D {
-    fn default() -> Self {
-        Physics2D {
-            x: 0f64,
-            y: 0f64,
-            r: 0f64,
-            dx: 0f64,
-            dy: 0f64,
-            speed: None,
-            angle: None,
-            accel: None,
-            delete: false
-        }
-    }
-}
-
 struct GameState {
+    world: World,
     rand: ThreadRng,
-    asteroid_timer: i32,
-    asteroids: Vec<Physics2D>,
-    bullets: Vec<Physics2D>,
-    player: Physics2D,
+    asteroid_timer: i32
 }
 
 impl State<Res> for GameState {
     fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
-        player_input(ctx, &mut self.player, &mut self.bullets);
-        self.player.apply_physics();
 
-        self.asteroid_spawning();
+        self.handle_input(ctx);
+        self.spawn_asteroids();
+        self.apply_physics();
+        self.apply_movement();
+        self.wrap_asteroids();
+        self.destroy_offscreen();
+        self.destroy_asteroids();
+        self.clean_up();
 
-        for asteroid in self.asteroids.iter_mut() {
-            asteroid.apply_physics();
+        if self.player_is_dead() {
+            return Ok(Trans::Switch(Box::new(DeadState)))
         }
-        let mut new_asteroids : Vec<Physics2D> = vec![];
-        for bullet in self.bullets.iter_mut() {
-            bullet.apply_physics();
-
-            for asteroid in self.asteroids.iter_mut() {
-                if bullet.collides_with(asteroid) {
-                    asteroid.r = asteroid.r / 1.5f64;
-                    if asteroid.r < 15f64 {
-                        asteroid.delete = true
-                    }
-                    else {
-                        let mut new_asteroid = Physics2D { ..*asteroid };
-                        asteroid.angle = Some(bullet.angle.unwrap() - self.rand.gen_range(0f64,140f64));
-                        new_asteroid.angle = Some(bullet.angle.unwrap() + self.rand.gen_range(0f64,140f64));
-                        new_asteroids.push(new_asteroid);
-                    }
-                    bullet.delete = true
-                }
-            }
-        }
-
-        for asteroid in self.asteroids.iter() {
-            if self.player.collides_with(asteroid) {
-                return Ok(Trans::Switch(Box::new(DeadState)));
-            }
-        }
-        
-        wrap_bodies(&mut self.asteroids);
-        wrap_body(&mut self.player);
-
-        self.asteroids.retain(|a| !a.delete);
-        self.asteroids.extend(new_asteroids);
-        self.bullets.retain(|b| !b.delete);
-
         Ok(Trans::None)
     }
 
     fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> tetra::Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
-
-        for ast in self.asteroids.iter() {
-            self.draw_asteroid(ctx, resources, ast.x, ast.y, ast.r);
-        }
-
-        for bullet in self.bullets.iter() {
-            self.draw_asteroid(ctx, resources, bullet.x, bullet.y, bullet.r);
-        }
-
-        self.draw_asteroid(ctx, resources, self.player.x, self.player.y, self.player.r);
+        self.render(ctx, resources);
 
         Ok(())
     }
@@ -177,29 +68,64 @@ impl State<Res> for GameState {
 
 impl GameState {
     fn new(_ctx: &mut Context) -> tetra::Result<GameState> {
+
+        let mut world = World::new();
+
+        world.insert((Player,), vec![
+            (Transform::new(640f64, 360f64, 10f64),)
+        ]);
+
         Ok(GameState {
             rand: rand::thread_rng(),
             asteroid_timer: 0,
-            asteroids: vec![],
-            bullets: vec![],
-            player: Physics2D::new(640f64, 360f64, 10f64),
+            world
         })
     }
 
-    /// # This draws an asteroid at position 500,500 that has a radius of 100
-    /// 
-    /// self.draw_asteroid(ctx, 500f64, 500f64, 100f64);
-    fn draw_asteroid(&self, ctx: &mut Context, resources: &mut Res, x: f64, y: f64, r: f64) {
-        let scale = (r / 1024f64) * 2f64;
-        let params = DrawParams::new()
-            .position(Vec2::new(x as f32, y as f32))
-            .scale(Vec2::new(scale as f32, scale as f32))
-            .origin(Vec2::new(512f32, 512f32));
-    
-        graphics::draw(ctx, &resources.1.asteroid, params);
+    fn handle_input(&mut self, ctx: &Context) {
+        let query = <(Write<Transform>, Tagged<Player>)>::query();
+        
+        for (mut player, _) in query.iter_mut(&mut self.world) {
+
+            // Movement
+            if input::is_key_down(ctx, Key::W) {
+                player.y -= 5f64;
+            }
+            if input::is_key_down(ctx, Key::A) {
+                player.x -= 5f64;
+            }
+            if input::is_key_down(ctx, Key::S) {
+                player.y += 5f64;
+            }
+            if input::is_key_down(ctx, Key::D) {
+                player.x += 5f64;
+            }
+
+            // Shooting
+            if input::is_mouse_button_down(ctx, MouseButton::Left) {
+
+                let pos = get_mouse_position(ctx);
+                let angle = player.get_angle_to(pos.x as f64, pos.y as f64);
+
+                self.create_bullet(
+                    Transform {
+                        x: player.x,
+                        y: player.y,
+                        r: 6f64,
+                        ..Transform::default() 
+                    }, 
+                    Physics {
+                        speed: 10f64,
+                        accel: 1f64,
+                        angle,
+                        ..Physics::default() 
+                    },
+                );
+            }
+        }
     }
 
-    fn asteroid_spawning(&mut self) {
+    fn spawn_asteroids(&mut self) {
         self.asteroid_timer += 1;
         while self.asteroid_timer > 50 {
             self.asteroid_timer -= 50;
@@ -240,14 +166,158 @@ impl GameState {
                 (x, y)
             };
 
-            let mut ast = Physics2D::new(x as f64, y as f64, radius);
-            let mut angle = ast.get_angle_to(640f64, 360f64);
+            let transform = Transform::new(x as f64, y as f64, radius);
+            let mut angle = transform.get_angle_to(640f64, 360f64);
             angle += self.rand.gen_range(-22f64, 22f64);
-            ast.angle = Some(angle);
-            ast.speed = Some(self.rand.gen_range(5f64, 10f64));
+            let speed = self.rand.gen_range(5f64, 10f64);
 
-            self.asteroids.push(ast);
+            self.create_asteroid(
+                transform,
+                Physics {
+                    speed,
+                    angle,
+                    ..Physics::default() 
+                },
+            );
         }
+    }
+
+    fn apply_physics(&mut self) {
+        let  query = <(Write<Transform>, Write<Physics>)>::query();
+
+        for (mut transform, mut physics) in query.iter_mut(&mut self.world) {
+
+            physics.speed += physics.accel;
+            physics.angle += physics.curve;
+
+            transform.dx = physics.angle.to_radians().sin() * physics.speed;
+            transform.dy = -physics.angle.to_radians().cos() * physics.speed;
+
+        }
+
+    }
+
+    fn apply_movement(&mut self) {
+        let query = <(Write<Transform>,)>::query();
+
+        for (mut transform,) in query.iter_mut(&mut self.world) {
+            transform.x += transform.dx;
+            transform.y += transform.dx;
+        }
+    }
+
+    fn wrap_asteroids(&mut self) {
+        let asteroids = <(Write<Transform>, Tagged<Asteroid>)>::query();
+
+        for (mut asteroid, _) in asteroids.iter_mut(&mut self.world) {
+
+            // Wrap X
+            if asteroid.x > 1280f64 + asteroid.r {
+                asteroid.x = -(asteroid.x - 1280f64);
+            }
+            else if asteroid.x < -asteroid.r {
+                asteroid.x = 1280f64 + (-asteroid.x);
+            }
+
+            // Wrap Y
+            if asteroid.y > 720f64 + asteroid.r {
+                asteroid.y = -(asteroid.y - 720f64);
+            }
+            else if asteroid.y < 0f64 - asteroid.r {
+                asteroid.y = 720f64 + (-asteroid.y);
+            }
+        }
+    }
+
+    fn destroy_offscreen(&mut self) {
+        let query = <(Read<Transform>,)>::query();
+
+        for (entity,(transform,)) in query.iter_entities(&self.world) {
+
+            if transform.x < -1000f64 || transform.x > 2280f64 || transform.y < -1000f64 || transform.y > 1720f64 {
+                self.world.add_tag(entity, Delete);
+            }
+        }
+    }
+
+    fn destroy_asteroids(&mut self) {
+        let bullets = <(Read<Transform>, Read<Physics>, Tagged<Bullet>)>::query();
+        let asteroids = <(Read<Transform>, Read<Physics>, Tagged<Asteroid>)>::query();
+        
+        for (bullet, (bullet_t, bullet_p, _)) in bullets.iter_entities(&self.world) {
+            for (asteroid, (mut asteroid_t, asteroid_p, _)) in asteroids.iter_entities_mut(&mut self.world) {
+
+                if bullet_t.collides_with(*asteroid_t) {
+                    self.world.add_tag(bullet, Delete);
+
+                    asteroid_t.r = asteroid_t.r / 1.5f64;
+
+                    if asteroid_t.r < 15f64 {
+                        self.world.add_tag(asteroid, Delete);
+                    }
+                    else {
+                        let mut new_physics = Physics { ..*asteroid_p };
+
+                        asteroid_p.angle = bullet_p.angle - self.rand.gen_range(0f64,140f64);
+                        new_physics.angle = bullet_p.angle + self.rand.gen_range(0f64,140f64);
+
+                        self.create_asteroid(*asteroid_t, new_physics);
+                    }
+                }
+            }
+        }
+    }
+
+    fn clean_up(&mut self) {
+        let query = <(Tagged<Delete>,)>::query();
+
+        for (entity, _) in query.iter_entities(&self.world) {
+            self.world.delete(entity);
+        }
+    }
+
+    fn player_is_dead(&self) -> bool {
+        let players = <(Read<Transform>, Tagged<Player>)>::query();
+        let asteroids = <(Read<Transform>, Tagged<Asteroid>)>::query();
+
+        for (player, _) in players.iter(&self.world) {
+            for (asteroid, _) in asteroids.iter(&self.world) {
+
+                if player.collides_with(*asteroid) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    fn render(&self, ctx: &mut Context, resources: &mut Res) {
+        let query = <(Read<Transform>,)>::query();
+
+        for (renderable,) in query.iter(&self.world) {
+
+            let scale = renderable.r / 1024f64 * 2f64;
+
+            let params = DrawParams::new()
+                .position(Vec2::new(renderable.x as f32, renderable.y as f32))
+                .scale(Vec2::new(scale as f32, scale as f32))
+                .origin(Vec2::new(512f32, 512f32));
+    
+            graphics::draw(ctx, &resources.1.asteroid, params);
+        }
+    }
+
+    fn create_bullet(&mut self, transform: Transform, physics: Physics) {
+        self.world.insert((Bullet,), vec![
+            (transform,physics)
+        ]);
+    }
+
+    fn create_asteroid(&mut self, transform: Transform, physics: Physics) {
+        self.world.insert((Asteroid,), vec![
+            (transform,physics)
+        ]);
     }
 }
 
@@ -266,67 +336,5 @@ impl State<Res> for DeadState {
         graphics::clear(ctx, Color::rgb(0.45, 0.65, 1.0));    
 
         Ok(())
-    }
-}
-
-fn player_input(ctx: &mut Context, player: &mut Physics2D, bullets: &mut Vec<Physics2D>) {
-    let mut input = Vec2::<i32>::default();
-    if input::is_key_down(ctx, Key::A) {
-        input.x -= 1;
-    }
-    if input::is_key_down(ctx, Key::D) {
-        input.x += 1;
-    }
-    if input::is_key_down(ctx, Key::W) {
-        input.y -= 1;
-    }
-    if input::is_key_down(ctx, Key::S) {
-        input.y += 1;
-    }
-
-    let mut input = Vec2::new(input.x as f64, input.y as f64);
-    if input != Vec2::new(0f64, 0f64) {
-        input.normalize();
-        input = input * 5f64;
-    }
-
-    player.dx = input.x;
-    player.dy = input.y;
-
-
-    if input::is_mouse_button_down(ctx, MouseButton::Left) {
-        let pos = get_mouse_position(ctx);
-        let angle = player.get_angle_to(pos.x as f64, pos.y as f64);
-        bullets.push(Physics2D {
-            x: player.x, 
-            y: player.y,
-            r: 6f64,
-            speed: Some(10f64),
-            accel: Some(1f64),
-            angle: Some(angle),
-            ..Physics2D::default()
-        });
-    }
-}
-
-fn wrap_bodies(bodies: &mut Vec<Physics2D>) {
-    for body in bodies.iter_mut() {
-        wrap_body(body);
-    }
-}
-
-fn wrap_body(body: &mut Physics2D) {
-    if body.x > 1280f64 + body.r {
-        body.x = -(body.x - 1280f64);
-    }
-    else if body.x < -body.r {
-        body.x = 1280f64 + (-body.x);
-    }
-
-    if body.y > 720f64 + body.r {
-        body.y = -(body.y - 720f64);
-    }
-    else if body.y < 0f64 - body.r {
-        body.y = 720f64 + (-body.y);
     }
 }
