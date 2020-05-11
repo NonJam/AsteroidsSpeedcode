@@ -5,9 +5,7 @@
 pub struct Transform {
     pub x: f64,
     pub y: f64,
-    pub r: f64,
-    pub dx: f64,
-    pub dy: f64
+    pub r: f64
 }
 
 impl Default for Transform {
@@ -15,9 +13,7 @@ impl Default for Transform {
         Transform {
             x: 0f64,
             y: 0f64,
-            r: 0f64,
-            dx: 0f64,
-            dy: 0f64
+            r: 0f64
         }
     }
 }
@@ -52,6 +48,8 @@ impl Transform {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Physics {
+    pub dx: f64,
+    pub dy: f64,
     pub speed: f64,
     pub angle: f64,
     pub accel: f64,
@@ -61,6 +59,8 @@ pub struct Physics {
 impl Default for Physics {
     fn default() -> Self {
         Physics {
+            dx: 0f64,
+            dy: 0f64,
             speed: 0f64,
             angle: 0f64,
             accel: 0f64,

@@ -45,7 +45,6 @@ impl State<Res> for GameState {
         self.handle_input(ctx);
         self.spawn_asteroids();
         self.apply_physics();
-        self.apply_movement();
         self.wrap_asteroids();
         self.destroy_offscreen();
         self.destroy_asteroids();
@@ -195,17 +194,11 @@ impl GameState {
             physics.speed += physics.accel;
             physics.angle += physics.curve;
 
-            transform.dx = physics.angle.to_radians().sin() * physics.speed;
-            transform.dy = -physics.angle.to_radians().cos() * physics.speed;
-        }
-    }
+            transform.x += physics.dx;
+            transform.y += physics.dy;
 
-    fn apply_movement(&mut self) {
-        let query = <(Write<Transform>,)>::query();
-
-        for (mut transform,) in query.iter_mut(&mut self.world) {
-            transform.x += transform.dx;
-            transform.y += transform.dy;
+            transform.x += physics.angle.to_radians().sin() * physics.speed;
+            transform.y -= physics.angle.to_radians().cos() * physics.speed;
         }
     }
 
