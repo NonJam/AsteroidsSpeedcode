@@ -192,15 +192,12 @@ impl GameState {
         let  query = <(Write<Transform>, Write<Physics>)>::query();
 
         for (mut transform, mut physics) in query.iter_mut(&mut self.world) {
-
             physics.speed += physics.accel;
             physics.angle += physics.curve;
 
             transform.dx = physics.angle.to_radians().sin() * physics.speed;
             transform.dy = -physics.angle.to_radians().cos() * physics.speed;
-
         }
-
     }
 
     fn apply_movement(&mut self) {
@@ -208,7 +205,7 @@ impl GameState {
 
         for (mut transform,) in query.iter_mut(&mut self.world) {
             transform.x += transform.dx;
-            transform.y += transform.dx;
+            transform.y += transform.dy;
         }
     }
 
@@ -247,7 +244,7 @@ impl GameState {
         }
 
         for data in add_tag.into_iter() {
-            self.world.add_tag(data, Delete);
+            self.world.add_tag(data, Delete).ok();
         }
     }
 
@@ -255,35 +252,63 @@ impl GameState {
         let bullets = <(Read<Transform>, Read<Physics>, Tagged<Bullet>)>::query();
         let asteroids = <(Read<Transform>, Read<Physics>, Tagged<Asteroid>)>::query();
         
-        for (bullet, (bullet_t, bullet_p, _)) in bullets.iter_entities(&self.world) {
-            for (asteroid, (mut asteroid_t, asteroid_p, _)) in asteroids.iter_entities_mut(&mut self.world) {
+        let mut collisions = vec![];
 
+        for (bullet, (bullet_t, _, _)) in bullets.iter_entities(&self.world) {
+            for (asteroid, (asteroid_t, _, _)) in asteroids.iter_entities(&self.world) {
                 if bullet_t.collides_with(*asteroid_t) {
-                    self.world.add_tag(bullet, Delete);
-
-                    asteroid_t.r = asteroid_t.r / 1.5f64;
-
-                    if asteroid_t.r < 15f64 {
-                        self.world.add_tag(asteroid, Delete);
-                    }
-                    else {
-                        let mut new_physics = Physics { ..*asteroid_p };
-
-                        asteroid_p.angle = bullet_p.angle - self.rand.gen_range(0f64,140f64);
-                        new_physics.angle = bullet_p.angle + self.rand.gen_range(0f64,140f64);
-
-                        self.create_asteroid(*asteroid_t, new_physics);
-                    }
+                    collisions.push((bullet, asteroid));
                 }
             }
+        }
+
+        let mut set_angle = vec![];
+        let mut create_asteroid = vec![];
+        for (bullet, ast) in collisions.into_iter() {
+            self.world.add_tag(bullet, Delete).ok();
+
+            {
+                let mut asteroid_t = self.world.get_component_mut::<Transform>(ast).unwrap();
+                asteroid_t.r = asteroid_t.r / 1.5f64;
+            }
+
+            if self.world.get_component::<Transform>(ast).unwrap().r < 15f64 {
+                self.world.add_tag(ast, Delete).ok();
+                continue;
+            } else {
+                    let asteroid_t = self.world.get_component::<Transform>(ast).unwrap();
+                    let asteroid_p = self.world.get_component::<Physics>(ast).unwrap();
+                    let bullet_p = self.world.get_component::<Physics>(bullet).unwrap();
+
+                    let mut new_physics = Physics { ..*asteroid_p };
+                    set_angle.push((ast, bullet_p.angle - self.rand.gen_range(0f64, 140f64)));
+                    new_physics.angle = bullet_p.angle + self.rand.gen_range(0f64, 140f64);
+
+                    create_asteroid.push(((*asteroid_t).clone(), new_physics));
+            }
+        }
+
+        for (ast, physics) in create_asteroid.into_iter() {
+            self.create_asteroid(ast, physics);
+        }
+
+        for (ast, desired) in set_angle.into_iter() {
+            self.world.get_component_mut::<Physics>(ast).unwrap().angle = desired;
         }
     }
 
     fn clean_up(&mut self) {
         let query = <(Tagged<Delete>,)>::query();
 
+        let mut delete = vec![];
+
         for (entity, _) in query.iter_entities(&self.world) {
+            delete.push(entity);
+        }
+
+        for entity in delete.into_iter() {
             self.world.delete(entity);
+
         }
     }
 
