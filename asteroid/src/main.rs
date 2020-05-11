@@ -191,14 +191,12 @@ impl GameState {
         let  query = <(Write<Transform>, Write<Physics>)>::query();
 
         for (mut transform, mut physics) in query.iter_mut(&mut self.world) {
+            
             physics.speed += physics.accel;
             physics.angle += physics.curve;
 
-            transform.x += physics.dx;
-            transform.y += physics.dy;
-
-            transform.x += physics.angle.to_radians().sin() * physics.speed;
-            transform.y -= physics.angle.to_radians().cos() * physics.speed;
+            transform.x += physics.dx + physics.angle.to_radians().sin() * physics.speed;
+            transform.y += physics.dy - physics.angle.to_radians().cos() * physics.speed;
         }
     }
 
