@@ -19,6 +19,7 @@ type Res = (Resources, Textures);
 
 struct AsteroidGame {
     asteroid_timer: i32,
+    spinner_timer: i32
 }
 
 fn main() -> tetra::Result {
@@ -29,6 +30,7 @@ fn main() -> tetra::Result {
             let mut res = Resources::default();
             res.insert(AsteroidGame {
                 asteroid_timer: 50i32,
+                spinner_timer: 50i32,
             });
             res.insert(StdRng::from_entropy());
             Ok((res, Textures::new(ctx)?))
@@ -89,6 +91,8 @@ impl GameState {
         let systems = Executor::new(vec![
             iframe_counter(),
             spawn_asteroids(),
+            spawn_spinners(),
+            shoot_spinners(),
             apply_physics(),
             wrap_asteroids(),
             destroy_offscreen(),

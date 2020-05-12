@@ -132,6 +132,15 @@ impl Default for Physics {
     }
 }
 
+
+//
+// Spinner
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spinner {
+    pub angle: f64,
+    pub cooldown: i32,
+}
+
 //
 // Collision
 

@@ -14,8 +14,8 @@ pub fn spawn_asteroids() -> System {
         .write_resource::<AsteroidGame>()
         .build(move |commands, _world, (rand, game), _queryies| {
             game.asteroid_timer += 1;
-            while game.asteroid_timer > 50 {
-                game.asteroid_timer -= 50;
+            while game.asteroid_timer > 100 {
+                game.asteroid_timer -= 100;
 
                 // Timer proc
                 let radius = rand.gen_range(10f64, 100f64);
@@ -123,6 +123,108 @@ pub fn destroy_offscreen() -> System {
         })
 }
 
+pub fn spawn_spinners() -> System {
+    SystemBuilder::<()>::new("Spawn Spinners System")
+    .with_query(<(Read<Transform>, Tagged<Player>)>::query())
+    .write_resource::<StdRng>()
+    .write_resource::<AsteroidGame>()
+    .build(move |commands, world, (rand, game), query|{
+
+        game.spinner_timer += 1;
+        while game.spinner_timer > 400 {
+            game.spinner_timer -= 400;
+
+            // Timer proc
+            let radius = 20f64;
+            let (x, y) = {
+                let x: f64;
+                let y: f64;
+
+                // Align vertically
+                if rand::random() {
+                    // Left
+                    if rand::random() {
+                        x = 0f64 - radius;
+                    }
+                    // Right 
+                    else {
+                        x = 1279f64 + radius;
+                    }
+
+                    y = rand.gen_range(0f64 - radius, 720f64 + radius);
+                } 
+                // Align horizontally
+                else {
+                    // Top
+                    if rand::random() {
+                        y = 0f64 - radius;
+                    }
+                    // Bottom
+                    else {
+                        y = 719f64 + radius;
+                    }
+
+                    x = rand.gen_range(0f64 - radius, 1280f64 + radius);
+                }
+
+                (x, y)
+            };
+
+            for (player,_) in query.iter(world) {
+
+                let transform = Transform::new(x as f64, y as f64, radius);
+                let angle = transform.get_angle_to(player.x, player.y);
+
+                commands.insert((), vec![(
+                    Spinner { angle , cooldown: 0 },
+                    transform,
+                    Physics {
+                        accel: 0.18f64,
+                        angle,
+                        ..Physics::default()
+                    },
+                )]);
+            }
+        }
+    })
+}
+
+pub fn shoot_spinners() -> System {
+    SystemBuilder::<()>::new("Shot Spinners System")
+    .with_query(<(Read<Transform>, Write<Spinner>)>::query())
+    .build(move |commands, world, _resource, query| {
+
+        for (transform, mut spinner) in query.iter_mut(world) {
+
+            if spinner.cooldown > 0 {
+                spinner.cooldown -= 1;
+            }
+            else {
+                for i in 0..4 {
+                    spinner.cooldown = 4;
+    
+                    spinner.angle += 4f64;
+    
+                    commands.insert((), vec![(
+                        Bullet {
+                            team: Team::Ast
+                        },
+                        Transform {
+                            r: 5f64,
+                            ..*transform
+                        },
+                        Physics {
+                            speed: 3f64,
+                            angle: spinner.angle + i as f64 * 90f64,
+                            ..Physics::default()
+                        },
+                    )]);
+                }
+            }
+        }
+    })
+}
+
 pub fn bullet_collision() -> System {
     SystemBuilder::<()>::new("Bullet Collision System")
         .with_query(<(Read<Transform>, Read<Physics>, Read<Bullet>)>::query())
@@ -164,7 +266,7 @@ pub fn asteroid_collision() -> System {
         .with_query(<(Read<Transform>, Read<Physics>, Tagged<Asteroid>)>::query())
         .with_query(<(Read<Transform>, Read<Physics>, Tagged<Player>)>::query())
         .build(
-            move |commands, world, resource, (ast_query, player_query)| {
+            move |commands, world, _resource, (ast_query, player_query)| {
                 for (_, (transform, _, _)) in ast_query.iter_entities(&world) {
                     for (player, (transform_two, _, _)) in player_query.iter_entities(&world) {
                         if transform.collides_with(*transform_two) {
@@ -215,8 +317,8 @@ pub fn player_collision() -> System {
             Tagged<Player>,
             Write<Renderable>,
         )>::query())
-        .build(move |commands, mut world, resources, query| {
-            for (e, (_, mut health, _, _, mut renderable)) in query.iter_entities_mut(&mut world) {
+        .build(move |commands, mut world, _resources, query| {
+            for (e, (_, mut health, _, _, _)) in query.iter_entities_mut(&mut world) {
                 commands.remove_component::<Collision>(e);
                 if health.iframe_count == 0 {
                     health.hp -= 1;
@@ -232,7 +334,7 @@ pub fn player_collision() -> System {
 pub fn iframe_counter() -> System {
     SystemBuilder::<()>::new("IFrame Counter System")
         .with_query(<(Write<Health>,)>::query())
-        .build(move |commands, mut world, resources, query| {
+        .build(move |_commands, mut world, _resources, query| {
             for (mut health,) in query.iter_mut(&mut world) {
                 if health.iframe_count > 0 {
                     health.iframe_count -= 1;
