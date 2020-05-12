@@ -69,6 +69,13 @@ impl Default for Physics {
     }
 }
 
+//
+// Collision
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Collision {
+    pub angle: f64,
+}
+
 
 //
 // Tags
@@ -81,7 +88,3 @@ pub struct Bullet;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Asteroid;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Delete;
-

@@ -4,7 +4,7 @@ use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 use legion::prelude::*;
 
-use rand::{Rng, SeedableRng};
+use rand::{SeedableRng};
 use rand::rngs::StdRng;
 
 mod components;
@@ -47,8 +47,7 @@ impl Textures {
 
 struct GameState {
     world: World,
-    systems: Executor,
-    rand: StdRng
+    systems: Executor
 }
 
 impl State<Res> for GameState {
@@ -56,11 +55,6 @@ impl State<Res> for GameState {
 
         self.handle_input(ctx);
         self.systems.execute(&mut self.world, &mut resources.0);
-        self.apply_physics();
-        self.wrap_asteroids();
-        self.destroy_offscreen();
-        self.destroy_asteroids();
-        self.clean_up();
 
         if self.player_is_dead() {
             return Ok(Trans::Switch(Box::new(DeadState)))
@@ -87,13 +81,17 @@ impl GameState {
         ]);
 
         let systems = Executor::new(vec![
-            spawn_asteroids()
+            spawn_asteroids(),
+            apply_physics(),
+            wrap_asteroids(),
+            destroy_offscreen(),
+            bullet_collision(),
+            split_asteroids()
         ]);
 
         Ok(GameState {
             world,
-            systems,
-            rand: StdRng::from_entropy()
+            systems
         })
     }
 
@@ -146,122 +144,6 @@ impl GameState {
         }
     }
 
-    fn apply_physics(&mut self) {
-        let  query = <(Write<Transform>, Write<Physics>)>::query();
-
-        for (mut transform, mut physics) in query.iter_mut(&mut self.world) {
-            
-            physics.speed += physics.accel;
-            physics.angle += physics.curve;
-
-            transform.x += physics.dx + physics.angle.to_radians().sin() * physics.speed;
-            transform.y += physics.dy - physics.angle.to_radians().cos() * physics.speed;
-        }
-    }
-
-    fn wrap_asteroids(&mut self) {
-        let asteroids = <(Write<Transform>, Tagged<Asteroid>)>::query();
-
-        for (mut asteroid, _) in asteroids.iter_mut(&mut self.world) {
-
-            // Wrap X
-            if asteroid.x > 1280f64 + asteroid.r {
-                asteroid.x = -(asteroid.x - 1280f64);
-            }
-            else if asteroid.x < -asteroid.r {
-                asteroid.x = 1280f64 + (-asteroid.x);
-            }
-
-            // Wrap Y
-            if asteroid.y > 720f64 + asteroid.r {
-                asteroid.y = -(asteroid.y - 720f64);
-            }
-            else if asteroid.y < 0f64 - asteroid.r {
-                asteroid.y = 720f64 + (-asteroid.y);
-            }
-        }
-    }
-
-    fn destroy_offscreen(&mut self) {
-        let query = <(Read<Transform>,)>::query();
-
-        let mut add_tag = vec![];
-
-        for (entity,(transform,)) in query.iter_entities(&self.world) {
-            if transform.x < -1000f64 || transform.x > 2280f64 || transform.y < -1000f64 || transform.y > 1720f64 {
-                add_tag.push(entity)
-            }
-        }
-
-        for data in add_tag.into_iter() {
-            self.world.add_tag(data, Delete).ok();
-        }
-    }
-
-    fn destroy_asteroids(&mut self) {
-        let bullets = <(Read<Transform>, Read<Physics>, Tagged<Bullet>)>::query();
-        let asteroids = <(Read<Transform>, Read<Physics>, Tagged<Asteroid>)>::query();
-        
-        let mut collisions = vec![];
-
-        for (bullet, (bullet_t, _, _)) in bullets.iter_entities(&self.world) {
-            for (asteroid, (asteroid_t, _, _)) in asteroids.iter_entities(&self.world) {
-                if bullet_t.collides_with(*asteroid_t) {
-                    collisions.push((bullet, asteroid));
-                }
-            }
-        }
-
-        let mut set_angle = vec![];
-        let mut create_asteroid = vec![];
-        for (bullet, ast) in collisions.into_iter() {
-            self.world.add_tag(bullet, Delete).ok();
-
-            {
-                let mut asteroid_t = self.world.get_component_mut::<Transform>(ast).unwrap();
-                asteroid_t.r = asteroid_t.r / 1.5f64;
-            }
-
-            if self.world.get_component::<Transform>(ast).unwrap().r < 15f64 {
-                self.world.add_tag(ast, Delete).ok();
-                continue;
-            } else {
-                    let asteroid_t = self.world.get_component::<Transform>(ast).unwrap();
-                    let asteroid_p = self.world.get_component::<Physics>(ast).unwrap();
-                    let bullet_p = self.world.get_component::<Physics>(bullet).unwrap();
-
-                    let mut new_physics = Physics { ..*asteroid_p };
-                    set_angle.push((ast, bullet_p.angle - self.rand.gen_range(0f64, 140f64)));
-                    new_physics.angle = bullet_p.angle + self.rand.gen_range(0f64, 140f64);
-
-                    create_asteroid.push(((*asteroid_t).clone(), new_physics));
-            }
-        }
-
-        for (ast, physics) in create_asteroid.into_iter() {
-            self.create_asteroid(ast, physics);
-        }
-
-        for (ast, desired) in set_angle.into_iter() {
-            self.world.get_component_mut::<Physics>(ast).unwrap().angle = desired;
-        }
-    }
-
-    fn clean_up(&mut self) {
-        let query = <(Tagged<Delete>,)>::query();
-
-        let mut delete = vec![];
-
-        for (entity, _) in query.iter_entities(&self.world) {
-            delete.push(entity);
-        }
-
-        for entity in delete.into_iter() {
-            self.world.delete(entity);
-
-        }
-    }
-
     fn player_is_dead(&self) -> bool {
         let players = <(Read<Transform>, Tagged<Player>)>::query();
         let asteroids = <(Read<Transform>, Tagged<Asteroid>)>::query();
@@ -296,12 +178,6 @@ impl GameState {
 
     fn create_bullet(&mut self, transform: Transform, physics: Physics) {
         self.world.insert((Bullet,), vec![
-            (transform,physics)
-        ]);
-    }
-
-    fn create_asteroid(&mut self, transform: Transform, physics: Physics) {
-        self.world.insert((Asteroid,), vec![
             (transform,physics)
         ]);
     }
