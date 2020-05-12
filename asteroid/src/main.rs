@@ -4,19 +4,31 @@ use tetra::math::Vec2;
 use tetra::graphics::DrawParams;
 use legion::prelude::*;
 
-use rand::prelude::*;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 
 mod components;
 use components::*;
+mod systems;
+use systems::*;
+
 
 type Res = (Resources, Textures);
+
+struct AsteroidGame {
+    asteroid_timer: i32
+}
 
 fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
         .run(GameState::new, |ctx| { 
-            let res = Resources::default();
+            let mut res = Resources::default();
+            res.insert(AsteroidGame {
+                asteroid_timer: 50i32
+            });
+            res.insert(StdRng::from_entropy());
             Ok((res, Textures::new(ctx)?))
         })
 }
@@ -35,15 +47,15 @@ impl Textures {
 
 struct GameState {
     world: World,
-    rand: ThreadRng,
-    asteroid_timer: i32
+    systems: Executor,
+    rand: StdRng
 }
 
 impl State<Res> for GameState {
-    fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
+    fn update(&mut self, ctx: &mut Context, resources: &mut Res) -> Result<Trans<Res>> {
 
         self.handle_input(ctx);
-        self.spawn_asteroids();
+        self.systems.execute(&mut self.world, &mut resources.0);
         self.apply_physics();
         self.wrap_asteroids();
         self.destroy_offscreen();
@@ -74,10 +86,14 @@ impl GameState {
             (Transform::new(640f64, 360f64, 10f64),)
         ]);
 
+        let systems = Executor::new(vec![
+            spawn_asteroids()
+        ]);
+
         Ok(GameState {
-            rand: rand::thread_rng(),
-            asteroid_timer: 0,
-            world
+            world,
+            systems,
+            rand: StdRng::from_entropy()
         })
     }
 
@@ -127,63 +143,6 @@ impl GameState {
 
         for data in create_bullets.into_iter() {
             self.create_bullet(data.0, data.1);
-        }
-    }
-
-    fn spawn_asteroids(&mut self) {
-        self.asteroid_timer += 1;
-        while self.asteroid_timer > 50 {
-            self.asteroid_timer -= 50;
-
-            // Timer proc
-            let radius = self.rand.gen_range(10f64, 100f64);
-            let (x, y) = {
-                let x: f64;
-                let y: f64;
-
-                // Align vertically
-                if rand::random() {
-                    // Left
-                    if rand::random() {
-                        x = 0f64 - radius;
-                    }
-                    // Right 
-                    else {
-                        x = 1279f64 + radius;
-                    }
-
-                    y = self.rand.gen_range(0f64 - radius, 720f64 + radius);
-                } 
-                // Align horizontally
-                else {
-                    // Top
-                    if rand::random() {
-                        y = 0f64 - radius;
-                    }
-                    // Bottom
-                    else {
-                        y = 719f64 + radius;
-                    }
-
-                    x = self.rand.gen_range(0f64 - radius, 1280f64 + radius);
-                }
-
-                (x, y)
-            };
-
-            let transform = Transform::new(x as f64, y as f64, radius);
-            let mut angle = transform.get_angle_to(640f64, 360f64);
-            angle += self.rand.gen_range(-22f64, 22f64);
-            let speed = self.rand.gen_range(5f64, 10f64);
-
-            self.create_asteroid(
-                transform,
-                Physics {
-                    speed,
-                    angle,
-                    ..Physics::default() 
-                },
-            );
         }
     }
 
