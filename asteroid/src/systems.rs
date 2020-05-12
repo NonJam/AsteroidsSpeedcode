@@ -159,7 +159,6 @@ pub fn split_asteroids() -> System {
                     commands.delete(asteroid);
                 } 
                 else {
-                    asteroid_p.speed += 0.3f64;
                     let mut new_physics = Physics { ..*asteroid_p };
                     asteroid_p.angle = collision.angle - rand.gen_range(0f64, 140f64);
                     new_physics.angle = collision.angle + rand.gen_range(0f64, 140f64);
