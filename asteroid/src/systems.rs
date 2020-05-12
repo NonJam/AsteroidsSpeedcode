@@ -228,33 +228,39 @@ pub fn shoot_spinners() -> System {
 pub fn bullet_collision() -> System {
     SystemBuilder::<()>::new("Bullet Collision System")
         .with_query(<(Read<Transform>, Read<Physics>, Read<Bullet>)>::query())
-        .with_query(<(Read<Transform>, Read<Physics>)>::query())
-        .build(move |commands, world, _resource, (bullets, asteroids)| {
+        .with_query(<(Read<Transform>, Read<Physics>, Tagged<Asteroid>)>::query())
+        .with_query(<(Read<Transform>, Read<Physics>, Tagged<Player>)>::query())
+        .build(move |commands, world, _resource, (bullets, asteroids, player)| {
             for (bullet, (bullet_t, bullet_p, bullet_team)) in bullets.iter_entities(world) {
-                for (e, (e_t, _)) in asteroids.iter_entities(world) {
-                    if world.get_component::<Bullet>(e).is_none() {
-                        // If bullet is opposite team than collider
-                        if let Team::Player = bullet_team.team {
-                            if world.get_tag::<Player>(e).is_some() {
-                                continue;
-                            }
-                        }
+                for (e, (e_t, _, _)) in asteroids.iter_entities(world) {
+                    if let Team::Ast = bullet_team.team {
+                        continue;
+                    }
 
-                        if let Team::Ast = bullet_team.team {
-                            if world.get_tag::<Asteroid>(e).is_some() {
-                                continue;
-                            }
-                        }
+                    if bullet_t.collides_with(*e_t) {
+                        commands.add_component(
+                            e,
+                            Collision {
+                                angle: bullet_p.angle,
+                            },
+                        );
+                        commands.delete(bullet);
+                    }
+                }
+            
+                for (e, (e_t, _, _)) in player.iter_entities(world) {
+                    if let Team::Player = bullet_team.team {
+                        continue;
+                    }
 
-                        if bullet_t.collides_with(*e_t) {
-                            commands.add_component(
-                                e,
-                                Collision {
-                                    angle: bullet_p.angle,
-                                },
-                            );
-                            commands.delete(bullet);
-                        }
+                    if bullet_t.collides_with(*e_t) {
+                        commands.add_component(
+                            e,
+                            Collision {
+                                angle: bullet_p.angle,
+                            },
+                        );
+                        commands.delete(bullet);
                     }
                 }
             }
