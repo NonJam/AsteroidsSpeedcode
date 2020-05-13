@@ -1,6 +1,3 @@
 [submodule "tetra"]
 	path = tetra
 	url = https://github.com/NonJam/tetra
-[submodule "legion"]
-	path = legion
-	url = https://github.com/TomGillen/legion

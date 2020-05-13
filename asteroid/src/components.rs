@@ -38,7 +38,7 @@ impl Health {
 //
 // Renderable
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct Renderable {
     pub color: Color,
 }

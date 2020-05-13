@@ -1,4 +1,4 @@
-use legion::prelude::*;
+use shipyard::*;
 use tetra::graphics::DrawParams;
 use tetra::graphics::{self, Color, Texture};
 use tetra::math::Vec2;
@@ -15,11 +15,32 @@ use components::*;
 mod systems;
 use systems::*;
 
-type Res = (Resources, Textures);
+type Res = Textures;
 
-struct AsteroidGame {
+pub struct AsteroidGame {
     asteroid_timer: i32,
-    spinner_timer: i32
+    spinner_timer: i32,
+    move_left: bool,
+    move_right: bool,
+    move_up: bool,
+    move_down: bool,
+    lmb_down: bool,
+    shoot_angle: f64,
+}
+
+impl AsteroidGame {
+    pub fn new(asteroid_timer: i32, spinner_timer: i32) -> Self {
+        AsteroidGame {
+            asteroid_timer,
+            spinner_timer,
+            move_left: false,
+            move_right: false,
+            move_down: false,
+            move_up: false,
+            lmb_down: false,
+            shoot_angle: 0f64,
+        }
+    }
 }
 
 fn main() -> tetra::Result {
@@ -27,13 +48,7 @@ fn main() -> tetra::Result {
         .show_mouse(true)
         .build()?
         .run(GameState::new, |ctx| {
-            let mut res = Resources::default();
-            res.insert(AsteroidGame {
-                asteroid_timer: 50i32,
-                spinner_timer: 50i32,
-            });
-            res.insert(StdRng::from_entropy());
-            Ok((res, Textures::new(ctx)?))
+            Ok(Textures::new(ctx)?)
         })
 }
 
@@ -51,13 +66,12 @@ impl Textures {
 
 struct GameState {
     world: World,
-    systems: Executor,
 }
 
 impl State<Res> for GameState {
-    fn update(&mut self, ctx: &mut Context, resources: &mut Res) -> Result<Trans<Res>> {
+    fn update(&mut self, ctx: &mut Context, _: &mut Res) -> Result<Trans<Res>> {
         self.handle_input(ctx);
-        self.systems.execute(&mut self.world, &mut resources.0);
+        self.world.run_workload("Main");
 
         if self.player_is_dead() {
             return Ok(Trans::Switch(Box::new(DeadState)));
@@ -76,108 +90,79 @@ impl State<Res> for GameState {
 
 impl GameState {
     fn new(_ctx: &mut Context) -> tetra::Result<GameState> {
-        let mut world = World::new();
+        let world = World::new();
+        world.add_unique(AsteroidGame::new(50i32, 50i32));
+        world.add_unique(StdRng::from_entropy());
 
-        world.insert(
-            (Player,),
-            vec![(
-                Transform::new(640f64, 360f64, 10f64),
-                Renderable::new(tetra::graphics::Color::rgb(0.0, 1.0, 0.0)),
-                Health::new(3, 20, Some(Color::RED)),
-                Physics::default(),
-            )],
-        );
+        world.run(|
+            mut entities: EntitiesViewMut, 
+            mut transforms: ViewMut<Transform>, 
+            mut renderables: ViewMut<Renderable>, 
+            mut healths: ViewMut<Health>, 
+            mut physicses: ViewMut<Physics>, 
+            mut players: ViewMut<Player> | {
+                entities.add_entity((&mut transforms, &mut renderables, &mut healths, &mut physicses, &mut players), (
+                    Transform::new(640f64, 360f64, 10f64),
+                    Renderable::new(tetra::graphics::Color::rgb(0.0, 1.0, 0.0)),
+                    Health::new(3, 20, Some(Color::RED)),
+                    Physics::default(),
+                    Player{},
+                ));
+        });
 
-        let systems = Executor::new(vec![
-            iframe_counter(),
-            spawn_asteroids(),
-            spawn_spinners(),
-            shoot_spinners(),
-            apply_physics(),
-            wrap_asteroids(),
-            destroy_offscreen(),
-            bullet_collision(),
-            player_collision(),
-            asteroid_collision(),
-            split_asteroids(),
-        ]);
+        world.add_workload("Main")
+            .with_system(system!(player_input))
+            .with_system(system!(iframe_counter))
+            .with_system(system!(spawn_asteroids))
+            .with_system(system!(spawn_spinners))
+            .with_system(system!(shoot_spinners))
+            .with_system(system!(apply_physics))
+            .with_system(system!(wrap_asteroids))
+            .with_system(system!(wrap_player))
+            .with_system(system!(destroy_offscreen))
+            .with_system(system!(bullet_collision))
+            .with_system(system!(player_collision))
+            .with_system(system!(asteroid_collision))
+            .with_system(system!(split_asteroids))
+            .build();
 
-        Ok(GameState { world, systems })
+        Ok(GameState { world })
     }
 
     fn handle_input(&mut self, ctx: &Context) {
-        let query = <(Write<Transform>, Tagged<Player>)>::query();
+        let (mut game, transforms, players) = self.world.borrow::<(UniqueViewMut<AsteroidGame>, View<Transform>, View<Player>)>();
+        game.move_right = input::is_key_down(ctx, Key::D);
+        game.move_left = input::is_key_down(ctx, Key::A);
+        game.move_up = input::is_key_down(ctx, Key::W);
+        game.move_down = input::is_key_down(ctx, Key::S);
+        game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
+        if game.lmb_down {
+            let transform = match (&transforms, &players).iter().next() {
+                Some(p) => p.0,
+                _ => return,
+            };
 
-        let mut create_bullets = vec![];
-
-        for (mut player, _) in query.iter_mut(&mut self.world) {
-            // Movement
-            if input::is_key_down(ctx, Key::W) {
-                player.y -= 5f64;
-            }
-            if input::is_key_down(ctx, Key::A) {
-                player.x -= 5f64;
-            }
-            if input::is_key_down(ctx, Key::S) {
-                player.y += 5f64;
-            }
-            if input::is_key_down(ctx, Key::D) {
-                player.x += 5f64;
-            }
-
-            // Shooting
-            if input::is_mouse_button_down(ctx, MouseButton::Left) {
-                let pos = get_mouse_position(ctx);
-                let angle = player.get_angle_to(pos.x as f64, pos.y as f64);
-
-                create_bullets.push((
-                    Transform {
-                        x: player.x,
-                        y: player.y,
-                        r: 6f64,
-                        ..Transform::default()
-                    },
-                    Physics {
-                        speed: 10f64,
-                        accel: 1f64,
-                        angle,
-                        ..Physics::default()
-                    },
-                    Renderable {
-                        color: Color::rgba(0.02, 0.23, 0.81, 0.5),
-                    },
-                    Bullet::new(Team::Player),
-                ));
-            }
-        }
-
-        for data in create_bullets.into_iter() {
-            self.world.insert((), vec![data]);
+            let pos = get_mouse_position(ctx);
+            let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
+            game.shoot_angle = angle;
         }
     }
 
     fn player_is_dead(&self) -> bool {
-        let players = <(Read<Transform>, Tagged<Player>)>::query();
-
-        for _ in players.iter(&self.world) {
-            return false;
-        }
-
-        true
+        let players = self.world.borrow::<View<Player>>();
+        match players.iter().next() {
+            Some(_) => return false,
+            _ => return true,
+        };
     }
 
     fn render(&self, ctx: &mut Context, resources: &mut Res) {
-        let query = <(Read<Transform>,)>::query();
+        let renderables = self.world.run(get_renderables);
 
-        for (entity, (transform,)) in query.iter_entities(&self.world) {
-            let mut color = if let Some(renderable) = self.world.get_component::<Renderable>(entity)
-            {
-                renderable.color
-            } else {
-                Color::BLACK
-            };
+        for (transform, renderable, health) in renderables.into_iter() {
+            let mut color = renderable.color;
 
-            if let Some(health) = self.world.get_component::<Health>(entity) {
+            if let Some(health) = health {
                 if health.iframe_count > 0 && health.iframe_col.is_some() {
                     color = health.iframe_col.unwrap();
                 }
@@ -191,9 +176,21 @@ impl GameState {
                 .origin(Vec2::new(512f32, 512f32))
                 .color(color);
 
-            graphics::draw(ctx, &resources.1.asteroid, params);
+            graphics::draw(ctx, &resources.asteroid, params);
         }
     }
+}
+
+fn get_renderables(transforms: View<Transform>, renderables: View<Renderable>, health: View<Health>) -> Vec<(Transform, Renderable, Option<Health>)> {
+    let mut output = vec![];
+    for (e, (transform, renderable)) in (&transforms, &renderables).iter().with_id() {
+        let health = match health.try_get(e) {
+            Ok(h) => Some(h.clone()),
+            _ => None,
+        };
+        output.push((*transform, *renderable, health));
+    }
+    output
 }
 
 struct DeadState;
