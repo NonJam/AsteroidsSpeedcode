@@ -136,10 +136,6 @@ impl GameState {
             .with_system(system!(wrap_asteroids))
             .with_system(system!(wrap_player))
             .with_system(system!(destroy_offscreen))
-            //.with_system(system!(bullet_collision))
-            //.with_system(system!(player_collision))
-            //.with_system(system!(asteroid_collision))
-            //.with_system(system!(split_asteroids))
             .with_system(system!(player_damage))
             .with_system(system!(asteroid_damage))
             .build();

@@ -244,7 +244,7 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
             ..Physics::default()
         },
         Renderable {
-            color: Color::rgba(0.02, 0.24, 0.81, 0.5),
+            color: Color::rgb(0.02, 0.24, 0.81),
         },
         Bullet::new(Team::Player),
         CollisionBody::new(tetra_plus::Collider::circle(6f64, layers::BULLET_PLAYER, layers::ASTEROID | layers::ENEMY)),
