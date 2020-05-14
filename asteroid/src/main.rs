@@ -56,7 +56,6 @@ impl AsteroidGame {
 fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
-        .timestep(tetra::time::Timestep::Variable)
         .build()?
         .run(GameState::new, |ctx| {
             Ok(Textures::new(ctx)?)
