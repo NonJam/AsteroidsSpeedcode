@@ -7,6 +7,8 @@ use tetra::{
     Context, ContextBuilder, Result, State, Trans,
 };
 
+use tetra_plus::*;
+
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
@@ -16,6 +18,14 @@ mod systems;
 use systems::*;
 
 type Res = Textures;
+
+pub mod layers {
+    pub const PLAYER: u64 = 1;
+    pub const ENEMY: u64 = 1 << 1;
+    pub const ASTEROID: u64 = 1 << 2;
+    pub const BULLET_PLAYER: u64 = 1 << 3;
+    pub const BULLET_ENEMY: u64 = 1 << 4;
+}
 
 pub struct AsteroidGame {
     asteroid_timer: i32,
@@ -71,6 +81,7 @@ struct GameState {
 impl State<Res> for GameState {
     fn update(&mut self, ctx: &mut Context, _: &mut Res) -> Result<Trans<Res>> {
         self.handle_input(ctx);
+        self.world.run_workload("Physics");
         self.world.run_workload("Main");
 
         if self.player_is_dead() {
@@ -79,7 +90,7 @@ impl State<Res> for GameState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> tetra::Result {
+    fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
         self.render(ctx, resources);
@@ -89,8 +100,8 @@ impl State<Res> for GameState {
 }
 
 impl GameState {
-    fn new(_ctx: &mut Context) -> tetra::Result<GameState> {
-        let world = World::new();
+    fn new(_ctx: &mut Context) -> Result<GameState> {
+        let mut world = World::new();
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
 
@@ -100,17 +111,22 @@ impl GameState {
             mut renderables: ViewMut<Renderable>, 
             mut healths: ViewMut<Health>, 
             mut physicses: ViewMut<Physics>, 
-            mut players: ViewMut<Player> | {
-                entities.add_entity((&mut transforms, &mut renderables, &mut healths, &mut physicses, &mut players), (
+            mut players: ViewMut<Player>, 
+            mut collision_bodies: ViewMut<CollisionBody>| {
+                entities.add_entity((&mut transforms, &mut renderables, &mut healths, &mut physicses, &mut players, &mut collision_bodies), (
                     Transform::new(640f64, 360f64, 10f64),
                     Renderable::new(tetra::graphics::Color::rgb(0.0, 1.0, 0.0)),
                     Health::new(3, 20, Some(Color::RED)),
                     Physics::default(),
                     Player{},
+                    CollisionBody::new(Collider::circle(10f64, layers::PLAYER, layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID)),
                 ));
         });
 
+        tetra_plus::prelude::physics_workload(&mut world);
+
         world.add_workload("Main")
+            .with_system(system!(player_collision_new))
             .with_system(system!(player_input))
             .with_system(system!(iframe_counter))
             .with_system(system!(spawn_asteroids))
@@ -125,6 +141,7 @@ impl GameState {
             .with_system(system!(asteroid_collision))
             .with_system(system!(split_asteroids))
             .build();
+
 
         Ok(GameState { world })
     }

@@ -2,11 +2,14 @@ use rand::rngs::StdRng;
 use rand::Rng;
 use tetra::graphics::Color;
 use shipyard::*;
+use tetra_plus::CollisionBody;
+use tetra_plus::Transform;
 
 use crate::components::*;
+use crate::layers;
 use crate::AsteroidGame;
 
-pub fn spawn_asteroids(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<StdRng>, mut game: UniqueViewMut<AsteroidGame>, mut transforms: ViewMut<Transform>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>, mut asteroids: ViewMut<Asteroid>) {
+pub fn spawn_asteroids(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<StdRng>, mut game: UniqueViewMut<AsteroidGame>, mut transforms: ViewMut<Transform>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>, mut asteroids: ViewMut<Asteroid>, mut collision_bodies: ViewMut<CollisionBody>) {
     game.asteroid_timer += 1;
     while game.asteroid_timer > 100 {
         game.asteroid_timer -= 100;
@@ -43,7 +46,7 @@ pub fn spawn_asteroids(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<St
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
 
-        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids), (transform, Physics { speed, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, Asteroid {}));
+        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids, &mut collision_bodies), (transform, Physics { speed, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, Asteroid {}, CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::ASTEROID, layers::BULLET_PLAYER | layers::PLAYER))));
     }
 }
 
@@ -113,7 +116,7 @@ pub fn destroy_offscreen(mut all_storages: AllStoragesViewMut) {
     }
 }
 
-pub fn spawn_spinners(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<StdRng>, mut game: UniqueViewMut<AsteroidGame>, players: View<Player>, mut transforms: ViewMut<Transform>, mut physicses: ViewMut<Physics>, mut spinners: ViewMut<Spinner>, mut renderables: ViewMut<Renderable>) {
+pub fn spawn_spinners(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<StdRng>, mut game: UniqueViewMut<AsteroidGame>, players: View<Player>, mut transforms: ViewMut<Transform>, mut physicses: ViewMut<Physics>, mut spinners: ViewMut<Spinner>, mut renderables: ViewMut<Renderable>, mut collision_bodies: ViewMut<CollisionBody>) {
     game.spinner_timer += 1;
     while game.spinner_timer > 400 {
         game.spinner_timer -= 400;
@@ -153,11 +156,11 @@ pub fn spawn_spinners(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<Std
 
         let transform = Transform::new(x as f64, y as f64, radius);
         let angle = transform.get_angle_to(player.x, player.y);
-        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable { color: Color::BLACK }));
+        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::ENEMY, layers::PLAYER))));
     }
 }
 
-pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Transform>, mut spinners: ViewMut<Spinner>, mut bullets: ViewMut<Bullet>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>) {
+pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Transform>, mut spinners: ViewMut<Spinner>, mut bullets: ViewMut<Bullet>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>, mut collision_bodies: ViewMut<CollisionBody>) {
     let mut deferred = vec![];
     
     for (transform, spinner) in (&transforms, &mut spinners).iter() {
@@ -185,13 +188,14 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                     Renderable {
                         color: Color::BLACK,
                     },
+                    CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::BULLET_ENEMY, layers::PLAYER)),
                 ));
             }
         }
     }
 
     for data in deferred.into_iter() {
-        entities.add_entity((&mut bullets, &mut transforms, &mut physicses, &mut renderables), data);
+        entities.add_entity((&mut bullets, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), data);
     }
 }
 
@@ -314,7 +318,7 @@ pub fn iframe_counter(mut healths: ViewMut<Health>) {
     }
 }
 
-pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidGame>, mut transforms: ViewMut<Transform>, players: View<Player>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>, mut bullets: ViewMut<Bullet>) {
+pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidGame>, mut transforms: ViewMut<Transform>, players: View<Player>, mut physicses: ViewMut<Physics>, mut renderables: ViewMut<Renderable>, mut bullets: ViewMut<Bullet>, mut collision_bodies: ViewMut<CollisionBody>) {
     let mut transform = match (&mut transforms, &players).iter().next() {
         Some(p) => p.0,
         _ => return,
@@ -336,7 +340,7 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
 
     let transform = transform.clone();
     if game.lmb_down {
-        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut bullets),         
+        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut bullets, &mut collision_bodies),         
         (Transform {
             x: transform.x,
             y: transform.y,
@@ -352,7 +356,25 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
         Renderable {
             color: Color::rgba(0.02, 0.24, 0.81, 0.5),
         },
-        Bullet::new(Team::Player)
+        Bullet::new(Team::Player),
+        CollisionBody::new(tetra_plus::Collider::circle(6f64, layers::BULLET_PLAYER, layers::ASTEROID | layers::ENEMY)),
         ));
+    }
+}
+
+pub fn player_collision_new(mut collision_bodies: ViewMut<CollisionBody>, players: View<Player>) {
+    let body = match (&mut collision_bodies, &players).iter().next() {
+        Some((b, _)) => b,
+        _ => return,
+    };
+
+    while let Some(collision) = body.colliders[0].overlapping.pop() {
+        if collision.collision_layer2 & layers::ASTEROID > 0 {
+            println!("Asteroid HIT");
+        } else if collision.collision_layer2 & layers::ENEMY > 0 {
+            println!("Enemy HIT");
+        } else if collision.collision_layer2 & layers::BULLET_ENEMY > 0 {
+            println!("Bullet HIT");
+        }
     }
 }

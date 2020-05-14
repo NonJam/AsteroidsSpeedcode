@@ -8,5 +8,6 @@ edition = "2018"
 
 [dependencies]
 tetra = { path = "../tetra" }
+tetra-plus = { path = "../tetra-plus" }
 shipyard = "0.4"
 rand = "0.7.3"
