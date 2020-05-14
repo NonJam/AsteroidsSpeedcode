@@ -56,6 +56,7 @@ impl AsteroidGame {
 fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
+        .timestep(tetra::time::Timestep::Variable)
         .build()?
         .run(GameState::new, |ctx| {
             Ok(Textures::new(ctx)?)
@@ -126,7 +127,6 @@ impl GameState {
         tetra_plus::prelude::physics_workload(&mut world);
 
         world.add_workload("Main")
-            .with_system(system!(player_collision_new))
             .with_system(system!(player_input))
             .with_system(system!(iframe_counter))
             .with_system(system!(spawn_asteroids))
@@ -136,10 +136,12 @@ impl GameState {
             .with_system(system!(wrap_asteroids))
             .with_system(system!(wrap_player))
             .with_system(system!(destroy_offscreen))
-            .with_system(system!(bullet_collision))
-            .with_system(system!(player_collision))
-            .with_system(system!(asteroid_collision))
-            .with_system(system!(split_asteroids))
+            //.with_system(system!(bullet_collision))
+            //.with_system(system!(player_collision))
+            //.with_system(system!(asteroid_collision))
+            //.with_system(system!(split_asteroids))
+            .with_system(system!(player_damage))
+            .with_system(system!(asteroid_damage))
             .build();
 
 

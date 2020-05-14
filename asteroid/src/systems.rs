@@ -4,6 +4,7 @@ use tetra::graphics::Color;
 use shipyard::*;
 use tetra_plus::CollisionBody;
 use tetra_plus::Transform;
+use tetra_plus::CollisionShape;
 
 use crate::components::*;
 use crate::layers;
@@ -199,117 +200,6 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
     }
 }
 
-pub fn bullet_collision(mut all_storages: AllStoragesViewMut) {    
-    let mut collisions = vec![];
-    
-    {let (transforms, physicses, bullets, asteroids, players) = all_storages.borrow::<(View<Transform>, View<Physics>, View<Bullet>, View<Asteroid>, View<Player>)>();
-    for (entity, (transform, physics, bullet)) in (&transforms, &physicses, &bullets).iter().with_id() {
-        for (entity2, (transform2, _, _)) in (&transforms, &physicses, &players).iter().with_id() {
-            if entity == entity2 {
-                continue;
-            }
-            if bullet.team == Team::Ast {
-                if transform.collides_with(*transform2) {
-                    collisions.push((entity, entity2, physics.angle));
-                }
-            }
-        }
-        for (entity2, (transform2, _, _)) in (&transforms, &physicses, &asteroids).iter().with_id() {
-            if entity == entity2 {
-                continue;
-            }
-            if bullet.team == Team::Player {
-                if transform.collides_with(*transform2) {
-                    collisions.push((entity, entity2, physics.angle));
-                }
-            }
-        }
-    }}
-
-    for (bullet, hit_e, angle) in collisions.into_iter() {
-        all_storages.delete(bullet);
-        let (entities, mut collisions) = all_storages.borrow::<(EntitiesViewMut, ViewMut<Collision>)>();
-        entities.add_component(&mut collisions, Collision { angle: angle }, hit_e);
-    }
-}
-
-pub fn asteroid_collision(entities: EntitiesViewMut, transforms: View<Transform>, physicses: View<Physics>, asteroids: View<Asteroid>, players: View<Player>, mut collisions: ViewMut<Collision>) {
-    let (p_entity, (p_transform, _, _)) = match (&transforms, &physicses, &players).iter().with_id().next() {
-        Some(p) => p,
-        _ => return,
-    };
-
-    for (transform, _, _) in (&transforms, &physicses, &asteroids).iter() {
-        if transform.collides_with(*p_transform) {
-            entities.add_component(&mut collisions, Collision { angle: 0f64 }, p_entity);
-        }
-    }
-}
-
-pub fn split_asteroids(mut all_storages: AllStoragesViewMut) {
-    let mut deferred_delete = vec![];
-    let mut deferred_create = vec![];
-
-    {
-        let (mut transforms, mut physicses, mut collisions, mut asteroids, mut rand, mut entities, mut renderables) = 
-            all_storages.borrow::<(ViewMut<Transform>, ViewMut<Physics>, ViewMut<Collision>, ViewMut<Asteroid>, UniqueViewMut<StdRng>, EntitiesViewMut, ViewMut<Renderable>)>();
-
-        for (entity, (transform, physics, collision, _)) in (&mut transforms, &mut physicses, &collisions, &asteroids).iter().with_id() {
-            transform.r = transform.r / 1.5f64;
-
-            if transform.r < 15f64 {
-                deferred_delete.push(entity);
-            } else {
-                let mut new_physics = Physics { ..*physics };
-                new_physics.angle = collision.angle + rand.gen_range(0f64, 140f64);
-                physics.angle = collision.angle + rand.gen_range(0f64, 140f64);
-
-                deferred_create.push((*transform, new_physics));
-            }
-        }
-
-        for (transform, physics) in deferred_create.into_iter() {
-            entities.add_entity((&mut transforms, &mut physicses, &mut asteroids, &mut renderables), (transform, physics, Asteroid {}, Renderable { color: Color::BLACK }));
-        }
-
-        let mut deferred = vec![];
-        for id in (&collisions, &asteroids).iter_ids() {
-            deferred.push(id);
-        }
-        for id in deferred.into_iter() {
-            collisions.remove(id);
-        }
-    }
-
-    deferred_delete.into_iter().for_each(|id| { all_storages.delete(id); });
-}
-
-pub fn player_collision(mut all_storages: AllStoragesViewMut) {
-    let mut deferred_delete = vec![];
-    
-    {let (physicses, mut healths, mut collisions, players) =
-        all_storages.borrow::<(View<Physics>, ViewMut<Health>, ViewMut<Collision>, View<Player>)>();
-
-    let (id, (_, health, _, _)) = match (&physicses, &mut healths, &mut collisions, &players).iter().with_id().next() {
-        Some(p) => p,
-        _ => return,
-    };
-
-    if health.iframe_count == 0 {
-        health.hp -= 1;
-        health.iframe_count = health.iframe_max;
-        if health.hp <= 0 {
-            deferred_delete.push(id);
-        }
-    }
-
-    collisions.remove(id);}
-
-    for id in deferred_delete.into_iter() {
-        all_storages.delete(id);
-    }
-}
-
 pub fn iframe_counter(mut healths: ViewMut<Health>) {
     for health in (&mut healths)
         .iter()
@@ -362,19 +252,103 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
     }
 }
 
-pub fn player_collision_new(mut collision_bodies: ViewMut<CollisionBody>, players: View<Player>) {
-    let body = match (&mut collision_bodies, &players).iter().next() {
-        Some((b, _)) => b,
+pub fn player_damage(mut all_storages: AllStoragesViewMut) {
+    let mut kill = vec![];
+    let outter_health;
+    let outter_id;
+    
+    {
+    let (mut collision_bodies, mut healths, players) = all_storages.borrow::<(ViewMut<CollisionBody>, ViewMut<Health>, View<Player>)>();
+    
+    let (id, body, health) = match (&mut collision_bodies, &players, &mut healths).iter().with_id().next() {
+        Some((id, (b, _, hp))) => (id, b, hp),
         _ => return,
     };
 
-    while let Some(collision) = body.colliders[0].overlapping.pop() {
+    if health.iframe_count > 0 {
+        return;
+    }
+
+    for collision in body.colliders[0].overlapping.iter() {
         if collision.collision_layer2 & layers::ASTEROID > 0 {
-            println!("Asteroid HIT");
+            health.hp -= 1;
+            health.iframe_count = health.iframe_max;
+            break;
         } else if collision.collision_layer2 & layers::ENEMY > 0 {
-            println!("Enemy HIT");
+            health.hp -= 1;
+            health.iframe_count = health.iframe_max;
+            break;
         } else if collision.collision_layer2 & layers::BULLET_ENEMY > 0 {
-            println!("Bullet HIT");
+            health.hp -= 1;
+            health.iframe_count = health.iframe_max;
+            kill.push(collision.entity2);
+            break;
         }
+    }
+
+    outter_health = health.clone();
+    outter_id = id.clone();
+    }
+
+    if outter_health.hp <= 0 {
+        all_storages.delete(outter_id);
+    }
+
+    for id in kill.into_iter() {
+        all_storages.delete(id);
+    }
+}
+
+pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
+    let mut create = vec![];
+    let mut kill = vec![];
+
+    {let (mut rand, mut transforms, mut bodies, asteroids, mut physicses) = 
+        all_storages.borrow::<(UniqueViewMut<StdRng>, ViewMut<Transform>, ViewMut<CollisionBody>, View<Asteroid>, ViewMut<Physics>)>();
+    for (id, (transform, body, physics, _)) in (&mut transforms, &mut bodies, &mut physicses, &asteroids).iter().with_id() {
+        let overlapping = &mut body.colliders[0].overlapping;
+        for collision in overlapping.clone().iter() { 
+            if collision.collision_layer2 & layers::BULLET_PLAYER > 0 {
+                kill.push(collision.entity2);
+
+                transform.r /= 1.5f64;
+
+                match body.colliders[0].shape {
+                    CollisionShape::Circle(r) => body.colliders[0].shape = CollisionShape::Circle(r / 1.5f64),
+                }
+
+                if transform.r < 15f64 {
+                    kill.push(id);
+                } else {
+                    let mut new_physics = Physics { ..*physics };
+                    let angle = collision.transform2.get_angle_to(collision.transform1.x, collision.transform1.y);
+                    new_physics.angle = angle + rand.gen_range(0f64, 140f64);
+                    physics.angle = angle + rand.gen_range(0f64, 140f64);
+
+                    let collision_body = CollisionBody::from_body(&body);
+
+                    create.push((*transform, new_physics, collision_body));
+                }
+            }
+        }
+    }}
+
+    {let (mut entities, mut asteroids, mut renderables, mut physicses, mut transforms, mut collision_bodies) =
+        all_storages.borrow::<(EntitiesViewMut, ViewMut<Asteroid>, ViewMut<Renderable>, ViewMut<Physics>, ViewMut<Transform>, ViewMut<CollisionBody>)>();
+    for (transform, physics, collision_body) in create.into_iter() {
+        entities.add_entity(
+            (&mut asteroids, &mut renderables, &mut physicses, &mut transforms, &mut collision_bodies),
+            (
+                Asteroid {},
+                Renderable::new(Color::BLACK),
+                physics,
+                transform,
+                collision_body,
+            )
+        ); 
+    }}
+
+    for id in kill.into_iter() {
+        all_storages.delete(id);
     }
 }
