@@ -1,10 +1,9 @@
+use vermarine_lib::*;
+
 use rand::rngs::StdRng;
 use rand::Rng;
 use tetra::graphics::Color;
 use shipyard::*;
-use tetra_plus::CollisionBody;
-use tetra_plus::Transform;
-use tetra_plus::CollisionShape;
 
 use crate::components::*;
 use crate::layers;
@@ -47,7 +46,7 @@ pub fn spawn_asteroids(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<St
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
 
-        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids, &mut collision_bodies), (transform, Physics { speed, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, Asteroid {}, CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::ASTEROID, layers::BULLET_PLAYER | layers::PLAYER))));
+        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids, &mut collision_bodies), (transform, Physics { speed, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, Asteroid {}, CollisionBody::new(Collider::circle(transform.r, layers::ASTEROID, layers::BULLET_PLAYER | layers::PLAYER))));
     }
 }
 
@@ -157,7 +156,7 @@ pub fn spawn_spinners(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<Std
 
         let transform = Transform::new(x as f64, y as f64, radius);
         let angle = transform.get_angle_to(player.x, player.y);
-        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::ENEMY, layers::PLAYER))));
+        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, CollisionBody::new(Collider::circle(transform.r, layers::ENEMY, layers::PLAYER))));
     }
 }
 
@@ -189,7 +188,7 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                     Renderable {
                         color: Color::BLACK,
                     },
-                    CollisionBody::new(tetra_plus::Collider::circle(transform.r, layers::BULLET_ENEMY, layers::PLAYER)),
+                    CollisionBody::new(Collider::circle(transform.r, layers::BULLET_ENEMY, layers::PLAYER)),
                 ));
             }
         }
@@ -247,7 +246,7 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
             color: Color::rgb(0.02, 0.24, 0.81),
         },
         Bullet::new(Team::Player),
-        CollisionBody::new(tetra_plus::Collider::circle(6f64, layers::BULLET_PLAYER, layers::ASTEROID | layers::ENEMY)),
+        CollisionBody::new(Collider::circle(6f64, layers::BULLET_PLAYER, layers::ASTEROID | layers::ENEMY)),
         ));
     }
 }

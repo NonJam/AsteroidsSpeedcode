@@ -1,8 +1,7 @@
 [workspace]
 members = [ 
     "asteroid",
-    "tetra-plus",
 ]
 exclude = [
-    "tetra",
+    "vermarine-lib",
 ]

@@ -1,3 +1,4 @@
+use vermarine_lib::*;
 use tetra::graphics::Color;
 
 //

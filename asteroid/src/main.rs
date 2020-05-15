@@ -1,3 +1,5 @@
+use vermarine_lib::*;
+
 use shipyard::*;
 use tetra::graphics::DrawParams;
 use tetra::graphics::{self, Color, Texture};
@@ -6,8 +8,6 @@ use tetra::{
     input::{self, get_mouse_position, Key, MouseButton},
     Context, ContextBuilder, Result, State, Trans,
 };
-
-use tetra_plus::*;
 
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -123,7 +123,7 @@ impl GameState {
                 ));
         });
 
-        tetra_plus::prelude::physics_workload(&mut world);
+        physics_workload(&mut world);
 
         world.add_workload("Main")
             .with_system(system!(player_input))
