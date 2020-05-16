@@ -64,12 +64,14 @@ fn main() -> tetra::Result {
 
 struct Textures {
     asteroid: Texture,
+    square: Texture,
 }
 
 impl Textures {
     fn new(ctx: &mut Context) -> Result<Self> {
         Ok(Textures {
             asteroid: Texture::new(ctx, "asteroid.png")?,
+            square: Texture::new(ctx, "square.png")?,
         })
     }
 }
@@ -113,14 +115,33 @@ impl GameState {
             mut physicses: ViewMut<Physics>, 
             mut players: ViewMut<Player>, 
             mut collision_bodies: ViewMut<CollisionBody>| {
+                // Player
                 entities.add_entity((&mut transforms, &mut renderables, &mut healths, &mut physicses, &mut players, &mut collision_bodies), (
                     Transform::new(640f64, 360f64, 10f64),
-                    Renderable::new(tetra::graphics::Color::rgb(0.0, 1.0, 0.0)),
+                    Renderable::new_sprite("square", tetra::graphics::Color::rgb(0.0, 1.0, 0.0)),
                     Health::new(3, 20, Some(Color::RED)),
                     Physics::default(),
                     Player{},
-                    CollisionBody::new(Collider::circle(10f64, layers::PLAYER, layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID)),
+                    CollisionBody::new(Collider::half_extents(10f64, 10f64, layers::PLAYER, layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID))
                 ));
+
+                /*
+                // Stationary circle to take dmg from
+                entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
+                    Transform::new(200.0, 200.0, 50.0),
+                    Renderable::new_sprite("asteroid", Color::BLACK),
+                    Physics::default(),
+                    CollisionBody::new(Collider::circle(50.0, layers::ASTEROID, layers::PLAYER))
+                ));
+
+                // Stationary square to take dmg from
+                entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
+                    Transform::new(800.0, 200.0, 50.0),
+                    Renderable::new_sprite("square", Color::BLACK),
+                    Physics::default(),
+                    CollisionBody::new(Collider::half_extents(50.0, 50.0, layers::ASTEROID, layers::PLAYER))
+                ));
+                */
         });
 
         physics_workload(&mut world);
@@ -190,7 +211,12 @@ impl GameState {
                 .origin(Vec2::new(512f32, 512f32))
                 .color(color);
 
-            graphics::draw(ctx, &resources.asteroid, params);
+            if renderable.sprite == "asteroid" {
+                graphics::draw(ctx, &resources.asteroid, params);
+            }
+            else if renderable.sprite == "square" {
+                graphics::draw(ctx, &resources.square, params);
+            }
         }
     }
 }

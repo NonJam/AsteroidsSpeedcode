@@ -42,18 +42,14 @@ impl Health {
 #[derive(Clone, Debug, Copy)]
 pub struct Renderable {
     pub color: Color,
+    pub sprite: &'static str,
 }
 
 impl Renderable {
-    pub fn new(color: Color) -> Self {
-        Renderable { color: color }
-    }
-}
-
-impl Default for Renderable {
-    fn default() -> Self {
+    pub fn new_sprite(sprite: &'static str, color: Color) -> Self {
         Renderable {
-            color: Color::BLACK,
+            color,
+            sprite,
         }
     }
 }

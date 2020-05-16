@@ -46,7 +46,7 @@ pub fn spawn_asteroids(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<St
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
 
-        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids, &mut collision_bodies), (transform, Physics { speed, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, Asteroid {}, CollisionBody::new(Collider::circle(transform.r, layers::ASTEROID, layers::BULLET_PLAYER | layers::PLAYER))));
+        entities.add_entity((&mut transforms, &mut physicses, &mut renderables, &mut asteroids, &mut collision_bodies), (transform, Physics { speed, angle, ..Physics::default() }, Renderable::new_sprite("asteroid", Color::BLACK), Asteroid {}, CollisionBody::new(Collider::circle(transform.r, layers::ASTEROID, layers::BULLET_PLAYER | layers::PLAYER))));
     }
 }
 
@@ -156,7 +156,7 @@ pub fn spawn_spinners(mut entities: EntitiesViewMut, mut rand: UniqueViewMut<Std
 
         let transform = Transform::new(x as f64, y as f64, radius);
         let angle = transform.get_angle_to(player.x, player.y);
-        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable { color: Color::BLACK }, CollisionBody::new(Collider::circle(transform.r, layers::ENEMY, layers::PLAYER))));
+        entities.add_entity((&mut spinners, &mut transforms, &mut physicses, &mut renderables, &mut collision_bodies), (Spinner { angle, cooldown: 0 }, transform, Physics { accel: 0.18f64, angle, ..Physics::default() }, Renderable::new_sprite("asteroid", Color::BLACK), CollisionBody::new(Collider::circle(transform.r, layers::ENEMY, layers::PLAYER))));
     }
 }
 
@@ -185,9 +185,10 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                         angle: spinner.angle + i as f64 * 90f64,
                         ..Physics::default()
                     },
-                    Renderable {
-                        color: Color::BLACK,
-                    },
+                    Renderable::new_sprite(
+                        "asteroid",
+                        Color::BLACK,
+                    ),
                     CollisionBody::new(Collider::circle(transform.r, layers::BULLET_ENEMY, layers::PLAYER)),
                 ));
             }
@@ -242,9 +243,10 @@ pub fn player_input(mut entities: EntitiesViewMut, game: UniqueViewMut<AsteroidG
             angle: game.shoot_angle,
             ..Physics::default()
         },
-        Renderable {
-            color: Color::rgb(0.02, 0.24, 0.81),
-        },
+        Renderable::new_sprite(
+            "asteroid",
+            Color::rgb(0.02, 0.24, 0.81),
+        ),
         Bullet::new(Team::Player),
         CollisionBody::new(Collider::circle(6f64, layers::BULLET_PLAYER, layers::ASTEROID | layers::ENEMY)),
         ));
@@ -314,6 +316,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
 
                 match body.colliders[0].shape {
                     CollisionShape::Circle(r) => body.colliders[0].shape = CollisionShape::Circle(r / 1.5f64),
+                    _ => {},
                 }
 
                 if transform.r < 15f64 {
@@ -339,7 +342,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
             (&mut asteroids, &mut renderables, &mut physicses, &mut transforms, &mut collision_bodies),
             (
                 Asteroid {},
-                Renderable::new(Color::BLACK),
+                Renderable::new_sprite("asteroid", Color::BLACK),
                 physics,
                 transform,
                 collision_body,
