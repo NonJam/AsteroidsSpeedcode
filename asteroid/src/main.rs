@@ -125,23 +125,23 @@ impl GameState {
                     CollisionBody::new(Collider::half_extents(10f64, 10f64, layers::PLAYER, layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID))
                 ));
 
-                /*
+                
                 // Stationary circle to take dmg from
-                entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(200.0, 200.0, 50.0),
+                /*entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
+                    Transform::new(200.0, 200.0, 10.0),
                     Renderable::new_sprite("asteroid", Color::BLACK),
                     Physics::default(),
-                    CollisionBody::new(Collider::circle(50.0, layers::ASTEROID, layers::PLAYER))
+                    CollisionBody::new(Collider::circle(10.0, layers::ASTEROID, layers::PLAYER))
                 ));
 
                 // Stationary square to take dmg from
                 entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(800.0, 200.0, 50.0),
+                    Transform::new(800.0, 200.0, 10.0),
                     Renderable::new_sprite("square", Color::BLACK),
                     Physics::default(),
-                    CollisionBody::new(Collider::half_extents(50.0, 50.0, layers::ASTEROID, layers::PLAYER))
-                ));
-                */
+                    CollisionBody::new(Collider::half_extents(10.0, 10.0, layers::ASTEROID, layers::PLAYER))
+                ));*/
+                
         });
 
         physics_workload(&mut world);

@@ -177,7 +177,7 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                         team: Team::Ast
                     },
                     Transform {
-                        r: 5f64,
+                        r: 5.0,
                         ..*transform
                     },
                     Physics {
@@ -189,7 +189,7 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                         "asteroid",
                         Color::BLACK,
                     ),
-                    CollisionBody::new(Collider::circle(transform.r, layers::BULLET_ENEMY, layers::PLAYER)),
+                    CollisionBody::new(Collider::circle(5.0, layers::BULLET_ENEMY, layers::PLAYER)),
                 ));
             }
         }
