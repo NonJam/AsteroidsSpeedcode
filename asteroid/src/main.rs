@@ -224,9 +224,10 @@ impl GameState {
 fn get_renderables(transforms: View<Transform>, renderables: View<Renderable>, health: View<Health>) -> Vec<(Transform, Renderable, Option<Health>)> {
     let mut output = vec![];
     for (e, (transform, renderable)) in (&transforms, &renderables).iter().with_id() {
-        let health = match health.try_get(e) {
-            Ok(h) => Some(h.clone()),
-            _ => None,
+        let health = if health.contains(e) { 
+            Some(health.get(e).clone())
+        } else {
+            None
         };
         output.push((*transform, *renderable, health));
     }
