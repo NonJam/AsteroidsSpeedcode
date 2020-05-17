@@ -225,7 +225,7 @@ fn get_renderables(transforms: View<Transform>, renderables: View<Renderable>, h
     let mut output = vec![];
     for (e, (transform, renderable)) in (&transforms, &renderables).iter().with_id() {
         let health = if health.contains(e) { 
-            Some(health.get(e).clone())
+            Some(health.get(e).ok().unwrap().clone())
         } else {
             None
         };
