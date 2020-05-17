@@ -1,5 +1,5 @@
-use vermarine_lib::*;
 use tetra::graphics::Color;
+use vermarine_lib::*;
 
 //
 // Health
@@ -47,10 +47,7 @@ pub struct Renderable {
 
 impl Renderable {
     pub fn new_sprite(sprite: &'static str, color: Color) -> Self {
-        Renderable {
-            color,
-            sprite,
-        }
+        Renderable { color, sprite }
     }
 }
 
@@ -79,7 +76,6 @@ impl Default for Physics {
         }
     }
 }
-
 
 //
 // Spinner
