@@ -177,7 +177,7 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                         team: Team::Ast
                     },
                     Transform {
-                        r: 5.0,
+                        r: 7.5,
                         ..*transform
                     },
                     Physics {
@@ -187,9 +187,9 @@ pub fn shoot_spinners(mut entities: EntitiesViewMut, mut transforms: ViewMut<Tra
                     },
                     Renderable::new_sprite(
                         "asteroid",
-                        Color::BLACK,
+                        Color::rgb(0.8, 0.0, 0.0),
                     ),
-                    CollisionBody::new(Collider::circle(5.0, layers::BULLET_ENEMY, layers::PLAYER)),
+                    CollisionBody::new(Collider::circle(7.5, layers::BULLET_ENEMY, layers::PLAYER)),
                 ));
             }
         }

@@ -83,8 +83,8 @@ struct GameState {
 impl State<Res> for GameState {
     fn update(&mut self, ctx: &mut Context, _: &mut Res) -> Result<Trans<Res>> {
         self.handle_input(ctx);
-        self.world.run_workload("Physics");
         self.world.run_workload("Main");
+        self.world.run_workload("Physics");
 
         if self.player_is_dead() {
             return Ok(Trans::Switch(Box::new(DeadState)));
@@ -128,18 +128,18 @@ impl GameState {
                 
                 // Stationary circle to take dmg from
                 /*entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(200.0, 200.0, 10.0),
+                    Transform::new(200.0, 200.0, 40.0),
                     Renderable::new_sprite("asteroid", Color::BLACK),
                     Physics::default(),
-                    CollisionBody::new(Collider::circle(10.0, layers::ASTEROID, layers::PLAYER))
+                    CollisionBody::new(Collider::circle(40.0, layers::ASTEROID, layers::PLAYER))
                 ));
 
                 // Stationary square to take dmg from
                 entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(800.0, 200.0, 10.0),
+                    Transform::new(800.0, 200.0, 40.0),
                     Renderable::new_sprite("square", Color::BLACK),
                     Physics::default(),
-                    CollisionBody::new(Collider::half_extents(10.0, 10.0, layers::ASTEROID, layers::PLAYER))
+                    CollisionBody::new(Collider::half_extents(40.0, 40.0, layers::ASTEROID, layers::PLAYER))
                 ));*/
                 
         });
