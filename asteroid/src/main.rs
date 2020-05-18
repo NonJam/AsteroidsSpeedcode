@@ -105,60 +105,6 @@ impl GameState {
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
 
-        world.run(
-            |mut entities: EntitiesViewMut,
-             mut transforms: ViewMut<Transform>,
-             mut renderables: ViewMut<Renderable>,
-             mut healths: ViewMut<Health>,
-             mut physicses: ViewMut<Physics>,
-             mut players: ViewMut<Player>,
-             mut collision_bodies: ViewMut<CollisionBody>| {
-                // Player
-                entities.add_entity(
-                    (
-                        &mut transforms,
-                        &mut renderables,
-                        &mut healths,
-                        &mut physicses,
-                        &mut players,
-                        &mut collision_bodies,
-                    ),
-                    (
-                        Transform::new(640f64, 360f64, 10f64),
-                        Renderable::new_sprite(
-                            "square",
-                            tetra::graphics::Color::rgb(0.0, 1.0, 0.0),
-                        ),
-                        Health::new(3, 20, Some(Color::RED)),
-                        Physics::default(),
-                        Player {},
-                        CollisionBody::new(Collider::half_extents(
-                            10f64,
-                            10f64,
-                            layers::PLAYER,
-                            layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID,
-                        )),
-                    ),
-                );
-
-                // Stationary circle to take dmg from
-                /*entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(200.0, 200.0, 40.0),
-                    Renderable::new_sprite("asteroid", Color::BLACK),
-                    Physics::default(),
-                    CollisionBody::new(Collider::circle(40.0, layers::ASTEROID, layers::PLAYER))
-                ));
-
-                // Stationary square to take dmg from
-                entities.add_entity((&mut transforms, &mut renderables, &mut physicses, &mut collision_bodies), (
-                    Transform::new(800.0, 200.0, 40.0),
-                    Renderable::new_sprite("square", Color::BLACK),
-                    Physics::default(),
-                    CollisionBody::new(Collider::half_extents(40.0, 40.0, layers::ASTEROID, layers::PLAYER))
-                ));*/
-            },
-        );
-
         physics_workload(&mut world);
 
         world
@@ -176,23 +122,95 @@ impl GameState {
             .with_system(system!(asteroid_damage))
             .build();
 
+        world.run(
+            |mut entities: EntitiesViewMut,
+             mut renderables: ViewMut<Renderable>,
+             mut healths: ViewMut<Health>,
+             mut physicses: ViewMut<Physics>,
+             mut players: ViewMut<Player>,
+             mut physics_bodies: ViewMut<PhysicsBody>,
+             mut physics_world: UniqueViewMut<PhysicsWorld>| {
+                // Player
+                let player = entities.add_entity(
+                    (
+                        &mut renderables,
+                        &mut healths,
+                        &mut physicses,
+                        &mut players,
+                    ),
+                    (
+                        Renderable::new_sprite(
+                            "square",
+                            tetra::graphics::Color::rgb(0.0, 1.0, 0.0),
+                        ),
+                        Health::new(3, 20, Some(Color::RED)),
+                        Physics::default(),
+                        Player {},
+                    ),
+                );
+
+                physics_world.create_body(
+                    &mut entities,
+                    &mut physics_bodies,
+                    &player, 
+                    Transform::new(640f64, 360f64, 10f64),
+                    CollisionBody::new(Collider::half_extents(
+                        10f64,
+                        10f64,
+                        layers::PLAYER,
+                        layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID,
+                    )),
+                );
+
+                /*// Stationary circle to take dmg from
+                let circle = entities.add_entity((&mut renderables, &mut physicses), (
+                    Renderable::new_sprite("asteroid", Color::BLACK),
+                    Physics::default(),
+                ));
+
+                physics_world.create_body(
+                    &mut entities,
+                    &mut physics_bodies,
+                    &circle, 
+                    Transform::new(200.0, 200.0, 40.0),
+                    CollisionBody::new(Collider::circle(40.0, layers::ASTEROID, layers::PLAYER))
+                );
+
+                // Stationary square to take dmg from
+                let square = entities.add_entity((&mut renderables, &mut physicses), (
+                    Renderable::new_sprite("square", Color::BLACK),
+                    Physics::default(),
+                ));
+
+                physics_world.create_body(
+                    &mut entities,
+                    &mut physics_bodies,
+                    &square, 
+                    Transform::new(800.0, 200.0, 40.0),
+                    CollisionBody::new(Collider::half_extents(40.0, 40.0, layers::ASTEROID, layers::PLAYER))
+                );*/
+            },
+        );
+
         Ok(GameState { world })
     }
 
     fn handle_input(&mut self, ctx: &Context) {
-        let (mut game, transforms, players) =
+        let (mut game, physics_bodies, players, mut physics_world) =
             self.world
-                .borrow::<(UniqueViewMut<AsteroidGame>, View<Transform>, View<Player>)>();
+                .borrow::<(UniqueViewMut<AsteroidGame>, View<PhysicsBody>, View<Player>, UniqueViewMut<PhysicsWorld>)>();
         game.move_right = input::is_key_down(ctx, Key::D);
         game.move_left = input::is_key_down(ctx, Key::A);
         game.move_up = input::is_key_down(ctx, Key::W);
         game.move_down = input::is_key_down(ctx, Key::S);
         game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
         if game.lmb_down {
-            let transform = match (&transforms, &players).iter().next() {
+            let body = match (&physics_bodies, &players).iter().next() {
                 Some(p) => p.0,
                 _ => return,
             };
+
+            let transform = body.transform(&mut physics_world);
 
             let pos = get_mouse_position(ctx);
             let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
@@ -238,18 +256,20 @@ impl GameState {
 }
 
 fn get_renderables(
-    transforms: View<Transform>,
+    physics_bodies: View<PhysicsBody>,
     renderables: View<Renderable>,
     health: View<Health>,
+    mut physics_world: UniqueViewMut<PhysicsWorld>,
 ) -> Vec<(Transform, Renderable, Option<Health>)> {
     let mut output = vec![];
-    for (e, (transform, renderable)) in (&transforms, &renderables).iter().with_id() {
+    for (e, (body, renderable)) in (&physics_bodies, &renderables).iter().with_id() {
         let health = if health.contains(e) {
             Some(health.get(e).ok().unwrap().clone())
         } else {
             None
         };
-        output.push((*transform, *renderable, health));
+        let body = physics_world.transform(body);
+        output.push((*body, *renderable, health));
     }
     output
 }
