@@ -259,7 +259,7 @@ fn get_renderables(
     physics_bodies: View<PhysicsBody>,
     renderables: View<Renderable>,
     health: View<Health>,
-    mut physics_world: UniqueViewMut<PhysicsWorld>,
+    physics_world: UniqueViewMut<PhysicsWorld>,
 ) -> Vec<(Transform, Renderable, Option<Health>)> {
     let mut output = vec![];
     for (e, (body, renderable)) in (&physics_bodies, &renderables).iter().with_id() {
