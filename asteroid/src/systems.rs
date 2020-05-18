@@ -420,7 +420,6 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
         }
 
         for collision in body.colliders[0].overlapping.iter() {
-            println!("collision");
             if collision.collision_layer2 & layers::ASTEROID > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
