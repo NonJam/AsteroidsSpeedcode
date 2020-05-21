@@ -142,6 +142,7 @@ impl GameState {
                         Renderable::new_sprite(
                             "square",
                             tetra::graphics::Color::rgb(0.0, 1.0, 0.0),
+                            10f64,
                         ),
                         Health::new(3, 20, Some(Color::RED)),
                         Physics::default(),
@@ -153,8 +154,8 @@ impl GameState {
                     &mut entities,
                     &mut physics_bodies,
                     &player, 
-                    Transform::new(640f64, 360f64, 10f64),
-                    CollisionBody::new(Collider::half_extents(
+                    Transform::new(640f64, 360f64),
+                    CollisionBody::from_sensor(Collider::half_extents(
                         10f64,
                         10f64,
                         layers::PLAYER,
@@ -238,7 +239,7 @@ impl GameState {
                 }
             }
 
-            let scale = transform.r / 1024f64 * 2f64;
+            let scale = renderable.r / 1024f64 * 2f64;
 
             let params = DrawParams::new()
                 .position(Vec2::new(transform.x as f32, transform.y as f32))

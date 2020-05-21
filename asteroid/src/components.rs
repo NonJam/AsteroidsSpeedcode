@@ -43,11 +43,12 @@ impl Health {
 pub struct Renderable {
     pub color: Color,
     pub sprite: &'static str,
+    pub r: f64,
 }
 
 impl Renderable {
-    pub fn new_sprite(sprite: &'static str, color: Color) -> Self {
-        Renderable { color, sprite }
+    pub fn new_sprite(sprite: &'static str, color: Color, r: f64) -> Self {
+        Renderable { color, sprite, r }
     }
 }
 

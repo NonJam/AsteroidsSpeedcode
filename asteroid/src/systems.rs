@@ -53,7 +53,7 @@ pub fn spawn_asteroids(
                 },
             )};
 
-        let transform = Transform::new(x as f64, y as f64, radius);
+        let transform = Transform::new(x as f64, y as f64);
         let mut angle = transform.get_angle_to(640f64, 360f64);
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
@@ -70,7 +70,7 @@ pub fn spawn_asteroids(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::BLACK),
+                Renderable::new_sprite("asteroid", Color::BLACK, radius),
                 Asteroid {},
 
             ),
@@ -81,10 +81,10 @@ pub fn spawn_asteroids(
             &mut physics_bodies, 
             &bullet, 
             transform,
-            CollisionBody::new(Collider::circle(
-                transform.r,
+            CollisionBody::from_sensor(Collider::circle(
+                radius,
                 layers::ASTEROID,
-                layers::BULLET_PLAYER | layers::PLAYER,
+                layers::BULLET_PLAYER,
             )),
         );
     }
@@ -105,22 +105,30 @@ pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: Vi
     }
 }
 
-pub fn wrap_asteroids(bodies: View<PhysicsBody>, asteroids: View<Asteroid>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
-    for (body, _) in (&bodies, &asteroids).iter() {
-        let asteroid = body.transform_mut(&mut physics_world);
+pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<Asteroid>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
+    physics_world.sync(&mut physics_bodies);
+    
+    for (body, _) in (&physics_bodies, &asteroids).iter() {
+        let (asteroid, collision_body) = body.parts(&physics_world);
+        let r = collision_body.sensors[0].shape.get_width() / 2.0;
 
         // Wrap X
-        if asteroid.x > 1280f64 + asteroid.r {
-            asteroid.x = -(asteroid.x - 1280f64);
-        } else if asteroid.x < -asteroid.r {
-            asteroid.x = 1280f64 + (-asteroid.x);
+        if asteroid.x > 1280f64 + r {
+            let x = -(asteroid.x - 1280f64);
+            body.move_body_to_x(&mut physics_world, x);
+        } else if asteroid.x < -r {
+            let x = 1280f64 + (-asteroid.x);
+            body.move_body_to_x(&mut physics_world, x);
         }
 
+        let asteroid = body.transform(&physics_world);
         // Wrap Y
-        if asteroid.y > 720f64 + asteroid.r {
-            asteroid.y = -(asteroid.y - 720f64);
-        } else if asteroid.y < 0f64 - asteroid.r {
-            asteroid.y = 720f64 + (-asteroid.y);
+        if asteroid.y > 720f64 + r {
+            let y = -(asteroid.y - 720f64);
+            body.move_body_to_y(&mut physics_world, y);
+        } else if asteroid.y < 0f64 - r {
+            let y = 720f64 + (-asteroid.y);
+            body.move_body_to_y(&mut physics_world, y);
         }
     }
 }
@@ -129,20 +137,26 @@ pub fn wrap_player(mut physics_bodies: ViewMut<PhysicsBody>, players: View<Playe
     physics_world.sync(&mut physics_bodies);
 
     for (body, _) in (&physics_bodies, &players).iter() {
-        let player = body.transform_mut(&mut physics_world);
+        let (player, collision_body) = body.parts(&physics_world);
+        let r = collision_body.sensors[0].shape.get_width() / 2.0;
 
         // Wrap X
-        if player.x > 1280f64 + player.r {
-            player.x = -(player.x - 1280f64);
-        } else if player.x < -player.r {
-            player.x = 1280f64 + (-player.x);
+        if player.x > 1280f64 + r {
+            let x = -(player.x - 1280f64);
+            body.move_body_to_x(&mut physics_world, x);
+        } else if player.x < -r {
+            let x = 1280f64 + (-player.x);
+            body.move_body_to_x(&mut physics_world, x);
         }
 
+        let player = body.transform(&mut physics_world);
         // Wrap Y
-        if player.y > 720f64 + player.r {
-            player.y = -(player.y - 720f64);
-        } else if player.y < 0f64 - player.r {
-            player.y = 720f64 + (-player.y);
+        if player.y > 720f64 + r {
+            let y = -(player.y - 720f64);
+            body.move_body_to_y(&mut physics_world, y);
+        } else if player.y < 0f64 - r {
+            let y = 720f64 + (-player.y);
+            body.move_body_to_y(&mut physics_world, y);
         }
     }
 }
@@ -221,7 +235,7 @@ pub fn spawn_spinners(
         };
         let player = body.transform(&mut physics_world);
 
-        let transform = Transform::new(x as f64, y as f64, radius);
+        let transform = Transform::new(x as f64, y as f64);
         let angle = transform.get_angle_to(player.x, player.y);
         let spinner = entities.add_entity(
             (
@@ -236,7 +250,7 @@ pub fn spawn_spinners(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::BLACK),
+                Renderable::new_sprite("asteroid", Color::BLACK, radius),
             ),
         );
 
@@ -245,7 +259,7 @@ pub fn spawn_spinners(
             &mut physics_bodies, 
             &spinner, 
             transform, 
-            CollisionBody::new(Collider::circle(transform.r, layers::ENEMY, layers::PLAYER)),
+            CollisionBody::from_sensor(Collider::circle(radius, layers::ENEMY, 0)),
     )
     }
 }
@@ -280,13 +294,12 @@ pub fn shoot_spinners(
                         angle: spinner.angle + i as f64 * 90f64,
                         ..Physics::default()
                     },
-                    Renderable::new_sprite("asteroid", Color::rgb(0.8, 0.0, 0.0)),
+                    Renderable::new_sprite("asteroid", Color::rgb(0.8, 0.0, 0.0), 7.5),
                 ), (
                     Transform {
-                        r: 7.5,
                         ..*transform
                     },
-                    CollisionBody::new(Collider::circle(7.5, layers::BULLET_ENEMY, layers::PLAYER)),
+                    CollisionBody::from_sensor(Collider::circle(7.5, layers::BULLET_ENEMY, 0)),
                 ),));
             }
         }
@@ -353,7 +366,7 @@ pub fn player_input(
         input.y += speed;
     }
 
-    body.move_body_and_collide(&mut physics_world, &input);
+    body.move_body(&mut physics_world, &input);
     let transform = physics_world.transform(body);
 
     let transform = transform.clone();
@@ -371,7 +384,7 @@ pub fn player_input(
                     angle: game.shoot_angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::rgb(0.02, 0.24, 0.81)),
+                Renderable::new_sprite("asteroid", Color::rgb(0.02, 0.24, 0.81), 6f64),
                 Bullet::new(Team::Player),
             ),
         );
@@ -383,13 +396,12 @@ pub fn player_input(
             Transform {
                 x: transform.x,
                 y: transform.y,
-                r: 6f64,
                 ..Transform::default()
             },
-            CollisionBody::new(Collider::circle(
+            CollisionBody::from_sensor(Collider::circle(
                 6f64,
                 layers::BULLET_PLAYER,
-                layers::ASTEROID | layers::ENEMY,
+                0,
             )),
         );
     }
@@ -397,8 +409,6 @@ pub fn player_input(
 
 pub fn player_damage(mut all_storages: AllStoragesViewMut) {
     let mut kill = vec![];
-    let outter_health;
-    let outter_id;
 
     {
         let (mut collision_bodies, mut healths, players, mut physics_world) =
@@ -419,7 +429,7 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
             return;
         }
 
-        for collision in body.colliders[0].overlapping.iter() {
+        for collision in body.sensors[0].overlapping.iter() {
             if collision.collision_layer2 & layers::ASTEROID > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
@@ -436,12 +446,9 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
             }
         }
 
-        outter_health = health.clone();
-        outter_id = id.clone();
-    }
-
-    if outter_health.hp <= 0 {
-        all_storages.delete(outter_id);
+        if health.hp <= 0 {
+            kill.push(id.clone());
+        }
     }
 
     for id in kill.into_iter() {
@@ -454,11 +461,12 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
     let mut kill = vec![];
 
     {
-        let (mut rand, mut physics_bodies, asteroids, mut physicses, mut physics_world) = all_storages
+        let (mut rand, mut physics_bodies, asteroids, mut renderables, mut physicses, mut physics_world) = all_storages
             .borrow::<(
                 UniqueViewMut<StdRng>,
                 ViewMut<PhysicsBody>,
                 View<Asteroid>,
+                ViewMut<Renderable>,
                 ViewMut<Physics>,
                 UniqueViewMut<PhysicsWorld>,
             )>();
@@ -466,28 +474,28 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
         physics_world.sync(&mut physics_bodies);
         
 
-        for (id, (physics_body, physics, _)) in
-            (&mut physics_bodies, &mut physicses, &asteroids)
+        for (id, (physics_body, physics, _, mut renderable)) in
+            (&mut physics_bodies, &mut physicses, &asteroids, &mut renderables)
                 .iter()
                 .with_id()
         {
             let (transform, body) = physics_body.parts_mut(&mut physics_world);
 
-            let overlapping = &mut body.colliders[0].overlapping;
+            let overlapping = &mut body.sensors[0].overlapping;
             for collision in overlapping.clone().iter() {
                 if collision.collision_layer2 & layers::BULLET_PLAYER > 0 {
                     kill.push(collision.entity2);
 
-                    transform.r /= 1.5f64;
+                    renderable.r /= 1.5f64;
 
-                    match body.colliders[0].shape {
+                    match body.sensors[0].shape {
                         CollisionShape::Circle(r) => {
-                            body.colliders[0].shape = CollisionShape::Circle(r / 1.5f64)
+                            body.sensors[0].shape = CollisionShape::Circle(r / 1.5)
                         }
-                        _ => {}
+                        _ => { }
                     }
 
-                    if transform.r < 15f64 {
+                    if body.sensors[0].shape.get_width() / 2.0 < 15f64 {
                         kill.push(id);
                     } else {
                         let mut new_physics = Physics { ..*physics };
@@ -531,7 +539,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 ),
                 (
                     Asteroid {},
-                    Renderable::new_sprite("asteroid", Color::BLACK),
+                    Renderable::new_sprite("asteroid", Color::BLACK, collision_body.sensors[0].shape.get_width() / 2.0),
                     physics,
                 ),
             );
