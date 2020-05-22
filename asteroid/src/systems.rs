@@ -79,7 +79,7 @@ pub fn spawn_asteroids(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            &bullet, 
+            bullet, 
             transform,
             CollisionBody::from_sensor(Collider::circle(
                 radius,
@@ -94,6 +94,10 @@ pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: Vi
     physics_world.sync(&mut physics_bodies);
 
     for (body, physics) in (&physics_bodies, &mut physicses).iter() {
+        if physics.apply_auto == false {
+            continue;
+        }
+
         physics.speed += physics.accel;
         physics.angle += physics.curve;
 
@@ -103,6 +107,42 @@ pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: Vi
         );
         body.move_body(&mut physics_world, &input);
     }
+}
+
+pub fn move_player_bullets(
+    mut physics_bodies: ViewMut<PhysicsBody>,
+    mut physics_world: UniqueViewMut<PhysicsWorld>,
+    mut physicses: ViewMut<Physics>,
+    bullets: View<Bullet>,
+) {
+    physics_world.sync(&mut physics_bodies);
+
+    for (body, physics, bullet) in (&physics_bodies, &mut physicses, &bullets).iter() {
+        if physics.apply_auto || bullet.team != Team::Player {
+            continue;
+        }
+
+        physics.speed += physics.accel;
+        physics.angle += physics.curve;
+
+        let mut input = Vec2::new(
+            physics.dx + physics.angle.to_radians().sin() * physics.speed,
+            physics.dy - physics.angle.to_radians().cos() * physics.speed,
+        );
+
+        let mut collisions = body.move_body_and_collide(&mut physics_world, &input);
+        if let Some(collision) = collisions.pop() {
+            let mut reflected = input.reflected(collision.normal);
+            //reflected *= -1.0;
+
+            physics.dx = reflected.x;
+            physics.dy = reflected.y;
+            physics.angle = 0.0;
+            physics.speed = 0.0;
+            physics.accel = 0.0;
+            physics.curve = 0.0;
+        }
+    } 
 }
 
 pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<Asteroid>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
@@ -257,7 +297,7 @@ pub fn spawn_spinners(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            &spinner, 
+            spinner, 
             transform, 
             CollisionBody::from_sensor(Collider::circle(radius, layers::ENEMY, 0)),
     )
@@ -299,7 +339,7 @@ pub fn shoot_spinners(
                     Transform {
                         ..*transform
                     },
-                    CollisionBody::from_sensor(Collider::circle(7.5, layers::BULLET_ENEMY, 0)),
+                    CollisionBody::from_sensor(Collider::circle(7.5, layers::BULLET_ENEMY, layers::WALL)),
                 ),));
             }
         }
@@ -318,7 +358,7 @@ pub fn shoot_spinners(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            &bullet, 
+            bullet, 
             (data.1).0, 
             (data.1).1,
         );
@@ -366,7 +406,7 @@ pub fn player_input(
         input.y += speed;
     }
 
-    body.move_body(&mut physics_world, &input);
+    body.move_body_and_collide(&mut physics_world, &input);
     let transform = physics_world.transform(body);
 
     let transform = transform.clone();
@@ -379,12 +419,13 @@ pub fn player_input(
             ),
             (
                 Physics {
+                    apply_auto: false,
                     speed: 10f64,
                     accel: 1f64,
                     angle: game.shoot_angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::rgb(0.02, 0.24, 0.81), 6f64),
+                Renderable::new_sprite("asteroid", Color::rgb(0.02, 0.24, 0.81), 10.0),
                 Bullet::new(Team::Player),
             ),
         );
@@ -392,17 +433,18 @@ pub fn player_input(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            &bullet, 
+            bullet, 
             Transform {
                 x: transform.x,
                 y: transform.y,
                 ..Transform::default()
             },
-            CollisionBody::from_sensor(Collider::circle(
-                6f64,
-                layers::BULLET_PLAYER,
-                0,
-            )),
+            CollisionBody::from_collider(
+                Collider::circle(
+                    10.0,
+                    layers::BULLET_PLAYER,
+                    layers::WALL
+                ),),
         );
     }
 }
@@ -547,7 +589,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
             physics_world.create_body(
                 &mut entities,
                 &mut physics_bodies,
-                &splitted,
+                splitted,
                 transform,
                 collision_body,
             );
@@ -555,6 +597,28 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
     }
 
     for id in kill.into_iter() {
+        all_storages.delete(id);
+    }
+}
+
+pub fn destroy_bullets(mut all_storages: AllStoragesViewMut) {
+    let mut to_kill = vec![];
+
+    all_storages.run(|
+        bullets: View<Bullet>,
+        mut bodies: ViewMut<PhysicsBody>,
+        mut world: UniqueViewMut<PhysicsWorld>,| {
+            for (id, (_, body)) in (&bullets, &mut bodies).iter().with_id() {
+                let body = body.collider(&mut world);
+                if let Some(sensor) = body.sensors.get(0) {
+                    if sensor.overlapping.len() > 0 {
+                        to_kill.push(id);
+                    }
+                }
+            }
+    });
+
+    for id in to_kill.into_iter() {
         all_storages.delete(id);
     }
 }

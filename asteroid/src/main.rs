@@ -25,6 +25,7 @@ pub mod layers {
     pub const ASTEROID: u64 = 1 << 2;
     pub const BULLET_PLAYER: u64 = 1 << 3;
     pub const BULLET_ENEMY: u64 = 1 << 4;
+    pub const WALL: u64 = 1 << 5;
 }
 
 pub struct AsteroidGame {
@@ -115,11 +116,13 @@ impl GameState {
             .with_system(system!(spawn_spinners))
             .with_system(system!(shoot_spinners))
             .with_system(system!(apply_physics))
+            .with_system(system!(move_player_bullets))
             .with_system(system!(wrap_asteroids))
             .with_system(system!(wrap_player))
             .with_system(system!(destroy_offscreen))
             .with_system(system!(player_damage))
             .with_system(system!(asteroid_damage))
+            .with_system(system!(destroy_bullets))
             .build();
 
         world.run(
@@ -153,43 +156,52 @@ impl GameState {
                 physics_world.create_body(
                     &mut entities,
                     &mut physics_bodies,
-                    &player, 
+                    player, 
                     Transform::new(640f64, 360f64),
-                    CollisionBody::from_sensor(Collider::half_extents(
-                        10f64,
-                        10f64,
-                        layers::PLAYER,
-                        layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID,
-                    )),
+                    CollisionBody::from_parts(
+                        // Collider
+                        vec![Collider::half_extents(
+                            10f64, 
+                            10f64, 
+                            layers::PLAYER, 
+                            layers::WALL,
+                        )], 
+                        // Sensor
+                        vec![Collider::half_extents(
+                            10f64,
+                            10f64,
+                            layers::PLAYER,
+                            layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID,
+                        )]),
                 );
 
-                /*// Stationary circle to take dmg from
+                // Stationary circle to take dmg from
                 let circle = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite("asteroid", Color::BLACK),
+                    Renderable::new_sprite("asteroid", Color::BLACK, 40.0),
                     Physics::default(),
                 ));
 
                 physics_world.create_body(
                     &mut entities,
                     &mut physics_bodies,
-                    &circle, 
-                    Transform::new(200.0, 200.0, 40.0),
-                    CollisionBody::new(Collider::circle(40.0, layers::ASTEROID, layers::PLAYER))
+                    circle, 
+                    Transform::new(200.0, 200.0),
+                    CollisionBody::from_collider(Collider::circle(40.0, layers::WALL, 0))
                 );
 
                 // Stationary square to take dmg from
                 let square = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite("square", Color::BLACK),
+                    Renderable::new_sprite("square", Color::BLACK, 40.0),
                     Physics::default(),
                 ));
 
                 physics_world.create_body(
                     &mut entities,
                     &mut physics_bodies,
-                    &square, 
-                    Transform::new(800.0, 200.0, 40.0),
-                    CollisionBody::new(Collider::half_extents(40.0, 40.0, layers::ASTEROID, layers::PLAYER))
-                );*/
+                    square, 
+                    Transform::new(800.0, 200.0),
+                    CollisionBody::from_collider(Collider::half_extents(40.0, 40.0, layers::WALL, 0))
+                );
             },
         );
 

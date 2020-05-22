@@ -57,6 +57,7 @@ impl Renderable {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Physics {
+    pub apply_auto: bool,
     pub dx: f64,
     pub dy: f64,
     pub speed: f64,
@@ -68,6 +69,7 @@ pub struct Physics {
 impl Default for Physics {
     fn default() -> Self {
         Physics {
+            apply_auto: true,
             dx: 0f64,
             dy: 0f64,
             speed: 0f64,
