@@ -93,7 +93,7 @@ pub fn spawn_asteroids(
 pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: ViewMut<Physics>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
     physics_world.sync(&mut physics_bodies);
 
-    for (body, physics) in (&physics_bodies, &mut physicses).iter() {
+    for (id, (_, physics)) in (&physics_bodies, &mut physicses).iter().with_id() {
         if physics.apply_auto == false {
             continue;
         }
@@ -105,7 +105,7 @@ pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: Vi
             physics.dx + physics.angle.to_radians().sin() * physics.speed,
             physics.dy - physics.angle.to_radians().cos() * physics.speed,
         );
-        body.move_body(&mut physics_world, &input);
+        physics_world.move_body(id, input);
     }
 }
 
@@ -117,7 +117,7 @@ pub fn move_player_bullets(
 ) {
     physics_world.sync(&mut physics_bodies);
 
-    for (body, physics, bullet) in (&physics_bodies, &mut physicses, &bullets).iter() {
+    for (id, (_, physics, bullet)) in (&physics_bodies, &mut physicses, &bullets).iter().with_id() {
         if physics.apply_auto || bullet.team != Team::Player {
             continue;
         }
@@ -125,15 +125,14 @@ pub fn move_player_bullets(
         physics.speed += physics.accel;
         physics.angle += physics.curve;
 
-        let mut input = Vec2::new(
+        let input = Vec2::new(
             physics.dx + physics.angle.to_radians().sin() * physics.speed,
             physics.dy - physics.angle.to_radians().cos() * physics.speed,
         );
 
-        let mut collisions = body.move_body_and_collide(&mut physics_world, &input);
+        let mut collisions = physics_world.move_body_and_collide(id, input);
         if let Some(collision) = collisions.pop() {
-            let mut reflected = input.reflected(collision.normal);
-            //reflected *= -1.0;
+            let reflected = input.reflected(collision.normal);
 
             physics.dx = reflected.x;
             physics.dy = reflected.y;
@@ -148,27 +147,27 @@ pub fn move_player_bullets(
 pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<Asteroid>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
     physics_world.sync(&mut physics_bodies);
     
-    for (body, _) in (&physics_bodies, &asteroids).iter() {
-        let (asteroid, collision_body) = body.parts(&physics_world);
+    for (id, _) in (&physics_bodies, &asteroids).iter().with_id() {
+        let (asteroid, collision_body) = physics_world.parts(id);
         let r = collision_body.sensors[0].shape.get_width() / 2.0;
 
         // Wrap X
         if asteroid.x > 1280f64 + r {
             let x = -(asteroid.x - 1280f64);
-            body.move_body_to_x(&mut physics_world, x);
+            physics_world.move_body_to_x(id, x);
         } else if asteroid.x < -r {
             let x = 1280f64 + (-asteroid.x);
-            body.move_body_to_x(&mut physics_world, x);
+            physics_world.move_body_to_x(id, x);
         }
 
-        let asteroid = body.transform(&physics_world);
+        let asteroid = physics_world.transform(id);
         // Wrap Y
         if asteroid.y > 720f64 + r {
             let y = -(asteroid.y - 720f64);
-            body.move_body_to_y(&mut physics_world, y);
+            physics_world.move_body_to_y(id, y);
         } else if asteroid.y < 0f64 - r {
             let y = 720f64 + (-asteroid.y);
-            body.move_body_to_y(&mut physics_world, y);
+            physics_world.move_body_to_y(id, y);
         }
     }
 }
@@ -176,27 +175,27 @@ pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<
 pub fn wrap_player(mut physics_bodies: ViewMut<PhysicsBody>, players: View<Player>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
     physics_world.sync(&mut physics_bodies);
 
-    for (body, _) in (&physics_bodies, &players).iter() {
-        let (player, collision_body) = body.parts(&physics_world);
+    for (id, _) in (&physics_bodies, &players).iter().with_id() {
+        let (player, collision_body) = physics_world.parts(id);
         let r = collision_body.sensors[0].shape.get_width() / 2.0;
 
         // Wrap X
         if player.x > 1280f64 + r {
             let x = -(player.x - 1280f64);
-            body.move_body_to_x(&mut physics_world, x);
+            physics_world.move_body_to_x(id, x);
         } else if player.x < -r {
             let x = 1280f64 + (-player.x);
-            body.move_body_to_x(&mut physics_world, x);
+            physics_world.move_body_to_x(id, x);
         }
 
-        let player = body.transform(&mut physics_world);
+        let player = physics_world.transform(id);
         // Wrap Y
         if player.y > 720f64 + r {
             let y = -(player.y - 720f64);
-            body.move_body_to_y(&mut physics_world, y);
+            physics_world.move_body_to_y(id, y);
         } else if player.y < 0f64 - r {
             let y = 720f64 + (-player.y);
-            body.move_body_to_y(&mut physics_world, y);
+            physics_world.move_body_to_y(id, y);
         }
     }
 }
@@ -208,8 +207,8 @@ pub fn destroy_offscreen(mut all_storages: AllStoragesViewMut) {
         let (mut physics_bodies, mut physics_world) = all_storages.borrow::<(ViewMut<PhysicsBody>, UniqueViewMut<PhysicsWorld>)>();
         physics_world.sync(&mut physics_bodies);
 
-        for (e, _) in (&physics_bodies).iter().with_id().filter(|(_, body)| {
-            let transform = body.transform(&mut physics_world);
+        for (e, _) in (&physics_bodies).iter().with_id().filter(|(e, _)| {
+            let transform = physics_world.transform(*e);
             transform.x < -1000f64
                 || transform.x > 2280f64
                 || transform.y < -1000f64
@@ -269,11 +268,11 @@ pub fn spawn_spinners(
                 },
             )};
 
-        let body = match (&physics_bodies, &players).iter().next() {
-            Some(p) => p.0.clone(),
+        let body = match (&physics_bodies, &players).iter().with_id().next() {
+            Some((id, _)) => id,
             _ => return,
         };
-        let player = body.transform(&mut physics_world);
+        let player = physics_world.transform(body);
 
         let transform = Transform::new(x as f64, y as f64);
         let angle = transform.get_angle_to(player.x, player.y);
@@ -316,8 +315,8 @@ pub fn shoot_spinners(
     let mut deferred = vec![];
     physics_world.sync(&mut physics_bodies);
 
-    for (body, spinner) in (&physics_bodies, &mut spinners).iter() {
-        let transform = body.transform(&mut physics_world);
+    for (id, (_, spinner)) in (&physics_bodies, &mut spinners).iter().with_id() {
+        let transform = physics_world.transform(id);
 
         if spinner.cooldown > 0 {
             spinner.cooldown -= 1;
@@ -386,8 +385,8 @@ pub fn player_input(
 ) {
     physics_world.sync(&mut physics_bodies);
     
-    let body = match (&physics_bodies, &players).iter().next() {
-        Some(p) => p.0,
+    let body = match (&physics_bodies, &players).iter().with_id().next() {
+        Some((id, _)) => id,
         _ => return,
     };
 
@@ -406,7 +405,7 @@ pub fn player_input(
         input.y += speed;
     }
 
-    body.move_body_and_collide(&mut physics_world, &input);
+    physics_world.move_body_and_collide(body, input);
     let transform = physics_world.transform(body);
 
     let transform = transform.clone();
@@ -463,7 +462,7 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
             .with_id()
             .next()
         {
-            Some((id, (b, _, hp))) => (id, b.collider(&mut physics_world), hp),
+            Some((id, (_, _, hp))) => (id, physics_world.collider(id), hp),
             _ => return,
         };
 
@@ -516,12 +515,12 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
         physics_world.sync(&mut physics_bodies);
         
 
-        for (id, (physics_body, physics, _, mut renderable)) in
+        for (id, (_, physics, _, mut renderable)) in
             (&mut physics_bodies, &mut physicses, &asteroids, &mut renderables)
                 .iter()
                 .with_id()
         {
-            let (transform, body) = physics_body.parts_mut(&mut physics_world);
+            let (transform, body) = physics_world.parts_mut(id);
 
             let overlapping = &mut body.sensors[0].overlapping;
             for collision in overlapping.clone().iter() {
@@ -607,9 +606,9 @@ pub fn destroy_bullets(mut all_storages: AllStoragesViewMut) {
     all_storages.run(|
         bullets: View<Bullet>,
         mut bodies: ViewMut<PhysicsBody>,
-        mut world: UniqueViewMut<PhysicsWorld>,| {
-            for (id, (_, body)) in (&bullets, &mut bodies).iter().with_id() {
-                let body = body.collider(&mut world);
+        world: UniqueViewMut<PhysicsWorld>,| {
+            for (id, (_, _)) in (&bullets, &mut bodies).iter().with_id() {
+                let body = world.collider(id);
                 if let Some(sensor) = body.sensors.get(0) {
                     if sensor.overlapping.len() > 0 {
                         to_kill.push(id);

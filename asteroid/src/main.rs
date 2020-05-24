@@ -209,7 +209,7 @@ impl GameState {
     }
 
     fn handle_input(&mut self, ctx: &Context) {
-        let (mut game, physics_bodies, players, mut physics_world) =
+        let (mut game, physics_bodies, players, physics_world) =
             self.world
                 .borrow::<(UniqueViewMut<AsteroidGame>, View<PhysicsBody>, View<Player>, UniqueViewMut<PhysicsWorld>)>();
         game.move_right = input::is_key_down(ctx, Key::D);
@@ -218,12 +218,12 @@ impl GameState {
         game.move_down = input::is_key_down(ctx, Key::S);
         game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
         if game.lmb_down {
-            let body = match (&physics_bodies, &players).iter().next() {
-                Some(p) => p.0,
+            let body = match (&physics_bodies, &players).iter().with_id().next() {
+                Some((id, _)) => id,
                 _ => return,
             };
 
-            let transform = body.transform(&mut physics_world);
+            let transform = physics_world.transform(body);
 
             let pos = get_mouse_position(ctx);
             let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
@@ -275,14 +275,14 @@ fn get_renderables(
     physics_world: UniqueViewMut<PhysicsWorld>,
 ) -> Vec<(Transform, Renderable, Option<Health>)> {
     let mut output = vec![];
-    for (e, (body, renderable)) in (&physics_bodies, &renderables).iter().with_id() {
+    for (e, (_, renderable)) in (&physics_bodies, &renderables).iter().with_id() {
         let health = if health.contains(e) {
             Some(health.get(e).ok().unwrap().clone())
         } else {
             None
         };
-        let body = physics_world.transform(body);
-        output.push((*body, *renderable, health));
+        let transform = physics_world.transform(e);
+        output.push((*transform, *renderable, health));
     }
     output
 }
