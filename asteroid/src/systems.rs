@@ -105,7 +105,10 @@ pub fn apply_physics(mut physics_bodies: ViewMut<PhysicsBody>, mut physicses: Vi
             physics.dx + physics.angle.to_radians().sin() * physics.speed,
             physics.dy - physics.angle.to_radians().cos() * physics.speed,
         );
-        physics_world.move_body(id, input);
+
+        if input != Vec2::zero() {
+            physics_world.move_body(id, input);
+        }
     }
 }
 
@@ -405,7 +408,9 @@ pub fn player_input(
         input.y += speed;
     }
 
-    physics_world.move_body_and_collide(body, input);
+    if input != Vec2::zero() {
+        physics_world.move_body_and_collide(body, input);
+    }
     let transform = physics_world.transform(body);
 
     let transform = transform.clone();
