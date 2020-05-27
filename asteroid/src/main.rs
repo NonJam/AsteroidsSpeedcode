@@ -31,16 +31,16 @@ use vermarine_lib::{
         PhysicsBody,
         CollisionBody,
         Collider,
+        Transform,
         world::{
             PhysicsWorld,
         }
     },
     rendering::{
         Renderables,
+        render_renderables,
+        Sprite,
     },
-    components::{
-        Transform,
-    }
 };
 
 use rand::rngs::StdRng;
@@ -117,7 +117,8 @@ impl State<Res> for GameState {
     fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
-        self.render(ctx, resources);
+        let (bodies, physics_world, sprites) = self.world.borrow::<(View<PhysicsBody>, UniqueViewMut<PhysicsWorld>, ViewMut<Sprite>)>();
+        render_renderables::<Sprite>((resources, ctx), bodies, physics_world, sprites);
 
         Ok(())
     }
@@ -150,7 +151,7 @@ impl GameState {
 
         world.run(
             |mut entities: EntitiesViewMut,
-             mut renderables: ViewMut<Renderable>,
+             mut sprites: ViewMut<Sprite>,
              mut healths: ViewMut<Health>,
              mut physicses: ViewMut<Physics>,
              mut players: ViewMut<Player>,
@@ -159,17 +160,13 @@ impl GameState {
                 // Player
                 let player = entities.add_entity(
                     (
-                        &mut renderables,
+                        &mut sprites,
                         &mut healths,
                         &mut physicses,
                         &mut players,
                     ),
                     (
-                        Renderable::new_sprite(
-                            textures::SQUARE,
-                            tetra::graphics::Color::rgb(0.0, 1.0, 0.0),
-                            10f64,
-                        ),
+                        create_sprite(textures::SQUARE, 10.0, Color::rgb(0.0, 1.0, 0.0)),
                         Health::new(3, 20, Some(Color::RED)),
                         Physics::default(),
                         Player {},
@@ -199,8 +196,8 @@ impl GameState {
                 );
 
                 // Stationary circle to take dmg from
-                let circle = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite(textures::ASTEROID, Color::BLACK, 40.0),
+                let circle = entities.add_entity((&mut sprites, &mut physicses), (
+                    create_sprite(textures::ASTEROID, 40.0, Color::BLACK),
                     Physics::default(),
                 ));
 
@@ -213,8 +210,8 @@ impl GameState {
                 );
 
                 // Stationary square to take dmg from
-                let square = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite(textures::SQUARE, Color::BLACK, 40.0),
+                let square = entities.add_entity((&mut sprites, &mut physicses), (
+                    create_sprite(textures::SQUARE, 40.0, Color::BLACK),
                     Physics::default(),
                 ));
 
@@ -261,41 +258,16 @@ impl GameState {
             _ => return true,
         };
     }
-
-    fn render(&self, ctx: &mut Context, resources: &mut Res) {
-        let renderables = self.world.run(get_renderables);
-
-        for (transform, renderable, health) in renderables.into_iter() {
-            let mut color = renderable.color;
-
-            if let Some(health) = health {
-                if health.iframe_count > 0 && health.iframe_col.is_some() {
-                    color = health.iframe_col.unwrap();
-                }
-            }
-
-            let scale = renderable.r / 1024f64 * 2f64;
-
-            let params = DrawParams::new()
-                .position(Vec2::new(transform.x as f32, transform.y as f32))
-                .scale(Vec2::new(scale as f32, scale as f32))
-                .origin(Vec2::new(512f32, 512f32))
-                .color(color);
-
-            let texture = &resources.lookup[renderable.sprite];
-            graphics::draw(ctx, texture, params);
-        }
-    }
 }
 
 fn get_renderables(
     physics_bodies: View<PhysicsBody>,
-    renderables: View<Renderable>,
+    sprites: View<Sprite>,
     health: View<Health>,
     physics_world: UniqueViewMut<PhysicsWorld>,
-) -> Vec<(Transform, Renderable, Option<Health>)> {
+) -> Vec<(Transform, Sprite, Option<Health>)> {
     let mut output = vec![];
-    for (e, (_, renderable)) in (&physics_bodies, &renderables).iter().with_id() {
+    for (e, (_, renderable)) in (&physics_bodies, &sprites).iter().with_id() {
         let health = if health.contains(e) {
             Some(health.get(e).ok().unwrap().clone())
         } else {

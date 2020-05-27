@@ -9,12 +9,13 @@ use vermarine_lib::{
         CollisionBody,
         Collider,
         CollisionShape,
+        Transform,
         world::{
             PhysicsWorld,
         },
     },
-    components::{
-        Transform,
+    rendering::{
+        Sprite,
     }
 };
 
@@ -33,7 +34,7 @@ pub fn spawn_asteroids(
     mut rand: UniqueViewMut<StdRng>,
     mut game: UniqueViewMut<AsteroidGame>,
     mut physicses: ViewMut<Physics>,
-    mut renderables: ViewMut<Renderable>,
+    mut sprites: ViewMut<Sprite>,
     mut asteroids: ViewMut<Asteroid>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
@@ -79,7 +80,7 @@ pub fn spawn_asteroids(
         let bullet = entities.add_entity(
             (
                 &mut physicses,
-                &mut renderables,
+                &mut sprites,
                 &mut asteroids,
             ),
             (
@@ -88,7 +89,7 @@ pub fn spawn_asteroids(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite(textures::ASTEROID, Color::BLACK, radius),
+                create_sprite(textures::ASTEROID, radius, Color::BLACK),
                 Asteroid {},
 
             ),
@@ -251,7 +252,7 @@ pub fn spawn_spinners(
     players: View<Player>,
     mut physicses: ViewMut<Physics>,
     mut spinners: ViewMut<Spinner>,
-    mut renderables: ViewMut<Renderable>,
+    mut sprites: ViewMut<Sprite>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
 ) {
@@ -301,7 +302,7 @@ pub fn spawn_spinners(
             (
                 &mut spinners,
                 &mut physicses,
-                &mut renderables,
+                &mut sprites,
             ),
             (
                 Spinner { angle, cooldown: 0 },
@@ -310,7 +311,7 @@ pub fn spawn_spinners(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite(textures::ASTEROID, Color::BLACK, radius),
+                create_sprite(textures::ASTEROID, radius, Color::BLACK),
             ),
         );
 
@@ -329,7 +330,7 @@ pub fn shoot_spinners(
     mut spinners: ViewMut<Spinner>,
     mut bullets: ViewMut<Bullet>,
     mut physicses: ViewMut<Physics>,
-    mut renderables: ViewMut<Renderable>,
+    mut sprites: ViewMut<Sprite>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
 ) {
@@ -354,7 +355,7 @@ pub fn shoot_spinners(
                         angle: spinner.angle + i as f64 * 90f64,
                         ..Physics::default()
                     },
-                    Renderable::new_sprite(textures::ASTEROID, Color::rgb(0.8, 0.0, 0.0), 7.5),
+                    create_sprite(textures::ASTEROID, 7.5, Color::rgb(0.8, 0.0, 0.0)),
                 ), (
                     Transform {
                         ..*transform
@@ -370,7 +371,7 @@ pub fn shoot_spinners(
             (
                 &mut bullets,
                 &mut physicses,
-                &mut renderables,
+                &mut sprites,
             ),
             data.0,
         );
@@ -401,7 +402,7 @@ pub fn player_input(
     mut physics_bodies: ViewMut<PhysicsBody>,
     players: View<Player>,
     mut physicses: ViewMut<Physics>,
-    mut renderables: ViewMut<Renderable>,
+    mut sprites: ViewMut<Sprite>,
     mut bullets: ViewMut<Bullet>,
 ) {
     physics_world.sync(&mut physics_bodies);
@@ -436,7 +437,7 @@ pub fn player_input(
         let bullet = entities.add_entity(
             (
                 &mut physicses,
-                &mut renderables,
+                &mut sprites,
                 &mut bullets,
             ),
             (
@@ -447,7 +448,7 @@ pub fn player_input(
                     angle: game.shoot_angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite(textures::ASTEROID, Color::rgb(0.02, 0.24, 0.81), 10.0),
+                create_sprite(textures::ASTEROID, 10.0, Color::rgb(0.02, 0.24, 0.81)),
                 Bullet::new(Team::Player),
             ),
         );
@@ -475,36 +476,41 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
     let mut kill = vec![];
 
     {
-        let (mut collision_bodies, mut healths, players, mut physics_world) =
-            all_storages.borrow::<(ViewMut<PhysicsBody>, ViewMut<Health>, View<Player>, UniqueViewMut<PhysicsWorld>)>();
+        let (mut collision_bodies, mut healths, players, mut sprites, mut physics_world) =
+            all_storages.borrow::<(ViewMut<PhysicsBody>, ViewMut<Health>, View<Player>, ViewMut<Sprite>, UniqueViewMut<PhysicsWorld>)>();
 
         physics_world.sync(&mut collision_bodies);
 
-        let (id, body, health) = match (&mut collision_bodies, &players, &mut healths)
+        let (id, body, health, sprite) = match (&mut collision_bodies, &players, &mut healths, &mut sprites)
             .iter()
             .with_id()
             .next()
         {
-            Some((id, (_, _, hp))) => (id, physics_world.collider(id), hp),
+            Some((id, (_, _, hp, sprite))) => (id, physics_world.collider(id), hp, sprite),
             _ => return,
         };
 
         if health.iframe_count > 0 {
             return;
+        } else {
+            sprite.draw_params.color = Color::rgb(0.0, 1.0, 0.0);
         }
 
         for collision in body.sensors[0].overlapping.iter() {
             if collision.collision_layer2 & layers::ASTEROID > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
+                sprite.draw_params.color = Color::RED;
                 break;
             } else if collision.collision_layer2 & layers::ENEMY > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
+                sprite.draw_params.color = Color::RED;
                 break;
             } else if collision.collision_layer2 & layers::BULLET_ENEMY > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
+                sprite.draw_params.color = Color::RED;
                 kill.push(collision.entity2);
                 break;
             }
@@ -525,12 +531,12 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
     let mut kill = vec![];
 
     {
-        let (mut rand, mut physics_bodies, asteroids, mut renderables, mut physicses, mut physics_world) = all_storages
+        let (mut rand, mut physics_bodies, asteroids, mut sprites, mut physicses, mut physics_world) = all_storages
             .borrow::<(
                 UniqueViewMut<StdRng>,
                 ViewMut<PhysicsBody>,
                 View<Asteroid>,
-                ViewMut<Renderable>,
+                ViewMut<Sprite>,
                 ViewMut<Physics>,
                 UniqueViewMut<PhysicsWorld>,
             )>();
@@ -538,8 +544,8 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
         physics_world.sync(&mut physics_bodies);
         
 
-        for (id, (_, physics, _, mut renderable)) in
-            (&mut physics_bodies, &mut physicses, &asteroids, &mut renderables)
+        for (id, (_, physics, _, sprite)) in
+            (&mut physics_bodies, &mut physicses, &asteroids, &mut sprites)
                 .iter()
                 .with_id()
         {
@@ -550,7 +556,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 if collision.collision_layer2 & layers::BULLET_PLAYER > 0 {
                     kill.push(collision.entity2);
 
-                    renderable.r /= 1.5f64;
+                    sprite.draw_params.scale /= 1.5;
 
                     match body.sensors[0].shape {
                         CollisionShape::Circle(r) => {
@@ -582,14 +588,14 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
         let (
             mut entities,
             mut asteroids,
-            mut renderables,
+            mut sprites,
             mut physicses,
             mut physics_bodies,
             mut physics_world,
         ) = all_storages.borrow::<(
             EntitiesViewMut,
             ViewMut<Asteroid>,
-            ViewMut<Renderable>,
+            ViewMut<Sprite>,
             ViewMut<Physics>,
             ViewMut<PhysicsBody>,
             UniqueViewMut<PhysicsWorld>,
@@ -598,12 +604,12 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
             let splitted = entities.add_entity(
                 (
                     &mut asteroids,
-                    &mut renderables,
+                    &mut sprites,
                     &mut physicses,
                 ),
                 (
                     Asteroid {},
-                    Renderable::new_sprite(textures::ASTEROID, Color::BLACK, collision_body.sensors[0].shape.get_width() / 2.0),
+                    create_sprite(textures::ASTEROID, collision_body.sensors[0].shape.get_width() / 2.0, Color::BLACK),
                     physics,
                 ),
             );
