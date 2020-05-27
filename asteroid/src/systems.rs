@@ -1,14 +1,32 @@
-use vermarine_lib::*;
+use vermarine_lib::{
+    shipyard::*,
+    tetra::{
+        graphics::Color,
+        math::Vec2,
+    },
+    physics::{
+        PhysicsBody,
+        CollisionBody,
+        Collider,
+        CollisionShape,
+        world::{
+            PhysicsWorld,
+        },
+    },
+    components::{
+        Transform,
+    }
+};
 
 use rand::rngs::StdRng;
 use rand::Rng;
-use shipyard::*;
-use tetra::graphics::Color;
-use tetra::math::Vec2;
 
-use crate::components::*;
-use crate::layers;
-use crate::AsteroidGame;
+use crate::{
+    components::*,
+    layers,
+    textures,
+    AsteroidGame,
+};
 
 pub fn spawn_asteroids(
     mut entities: EntitiesViewMut,
@@ -70,7 +88,7 @@ pub fn spawn_asteroids(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::BLACK, radius),
+                Renderable::new_sprite(textures::ASTEROID, Color::BLACK, radius),
                 Asteroid {},
 
             ),
@@ -292,7 +310,7 @@ pub fn spawn_spinners(
                     angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::BLACK, radius),
+                Renderable::new_sprite(textures::ASTEROID, Color::BLACK, radius),
             ),
         );
 
@@ -336,7 +354,7 @@ pub fn shoot_spinners(
                         angle: spinner.angle + i as f64 * 90f64,
                         ..Physics::default()
                     },
-                    Renderable::new_sprite("asteroid", Color::rgb(0.8, 0.0, 0.0), 7.5),
+                    Renderable::new_sprite(textures::ASTEROID, Color::rgb(0.8, 0.0, 0.0), 7.5),
                 ), (
                     Transform {
                         ..*transform
@@ -429,7 +447,7 @@ pub fn player_input(
                     angle: game.shoot_angle,
                     ..Physics::default()
                 },
-                Renderable::new_sprite("asteroid", Color::rgb(0.02, 0.24, 0.81), 10.0),
+                Renderable::new_sprite(textures::ASTEROID, Color::rgb(0.02, 0.24, 0.81), 10.0),
                 Bullet::new(Team::Player),
             ),
         );
@@ -585,7 +603,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 ),
                 (
                     Asteroid {},
-                    Renderable::new_sprite("asteroid", Color::BLACK, collision_body.sensors[0].shape.get_width() / 2.0),
+                    Renderable::new_sprite(textures::ASTEROID, Color::BLACK, collision_body.sensors[0].shape.get_width() / 2.0),
                     physics,
                 ),
             );

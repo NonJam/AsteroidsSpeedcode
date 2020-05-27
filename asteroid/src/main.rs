@@ -1,23 +1,55 @@
-use vermarine_lib::*;
+mod components;
+mod systems;
 
-use shipyard::*;
-use tetra::graphics::DrawParams;
-use tetra::graphics::{self, Color, Texture};
-use tetra::math::Vec2;
-use tetra::{
-    input::{self, get_mouse_position, Key, MouseButton},
-    Context, ContextBuilder, Result, State, Trans,
+use vermarine_lib::{
+    shipyard::{
+        self,
+        *,
+    },
+    tetra::{
+        self,
+        graphics::{
+            self, 
+            DrawParams, 
+            Color, 
+        },
+        math::Vec2,
+        input::{
+            self,
+            get_mouse_position,
+            Key,
+            MouseButton,
+        },
+        Context,
+        ContextBuilder,
+        Result,
+        State,
+        Trans,
+    },
+    physics::{
+        physics_workload,
+        PhysicsBody,
+        CollisionBody,
+        Collider,
+        world::{
+            PhysicsWorld,
+        }
+    },
+    rendering::{
+        Renderables,
+    },
+    components::{
+        Transform,
+    }
 };
 
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-mod components;
 use components::*;
-mod systems;
 use systems::*;
 
-type Res = Textures;
+type Res = Renderables;
 
 pub mod layers {
     pub const PLAYER: u64 = 1;
@@ -26,6 +58,11 @@ pub mod layers {
     pub const BULLET_PLAYER: u64 = 1 << 3;
     pub const BULLET_ENEMY: u64 = 1 << 4;
     pub const WALL: u64 = 1 << 5;
+}
+
+pub mod textures {
+    pub const ASTEROID: &'static str = "asteroid";
+    pub const SQUARE: &'static str = "square";
 }
 
 pub struct AsteroidGame {
@@ -58,21 +95,7 @@ fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new, |ctx| Ok(Textures::new(ctx)?))
-}
-
-struct Textures {
-    asteroid: Texture,
-    square: Texture,
-}
-
-impl Textures {
-    fn new(ctx: &mut Context) -> Result<Self> {
-        Ok(Textures {
-            asteroid: Texture::new(ctx, "asteroid.png")?,
-            square: Texture::new(ctx, "square.png")?,
-        })
-    }
+        .run(GameState::new, |ctx| Ok(Renderables::new(ctx)?))
 }
 
 struct GameState {
@@ -143,7 +166,7 @@ impl GameState {
                     ),
                     (
                         Renderable::new_sprite(
-                            "square",
+                            textures::SQUARE,
                             tetra::graphics::Color::rgb(0.0, 1.0, 0.0),
                             10f64,
                         ),
@@ -177,7 +200,7 @@ impl GameState {
 
                 // Stationary circle to take dmg from
                 let circle = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite("asteroid", Color::BLACK, 40.0),
+                    Renderable::new_sprite(textures::ASTEROID, Color::BLACK, 40.0),
                     Physics::default(),
                 ));
 
@@ -191,7 +214,7 @@ impl GameState {
 
                 // Stationary square to take dmg from
                 let square = entities.add_entity((&mut renderables, &mut physicses), (
-                    Renderable::new_sprite("square", Color::BLACK, 40.0),
+                    Renderable::new_sprite(textures::SQUARE, Color::BLACK, 40.0),
                     Physics::default(),
                 ));
 
@@ -259,11 +282,8 @@ impl GameState {
                 .origin(Vec2::new(512f32, 512f32))
                 .color(color);
 
-            if renderable.sprite == "asteroid" {
-                graphics::draw(ctx, &resources.asteroid, params);
-            } else if renderable.sprite == "square" {
-                graphics::draw(ctx, &resources.square, params);
-            }
+            let texture = &resources.lookup[renderable.sprite];
+            graphics::draw(ctx, texture, params);
         }
     }
 }
