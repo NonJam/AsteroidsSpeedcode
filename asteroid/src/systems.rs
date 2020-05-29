@@ -154,8 +154,13 @@ pub fn move_player_bullets(
         );
 
         let mut collisions = physics_world.move_body_and_collide(id, input);
+
         if let Some(collision) = collisions.pop() {
             let reflected = input.reflected(collision.normal);
+
+            if reflected.x.is_nan() || reflected.y.is_nan() {
+                continue;
+            }
 
             physics.dx = reflected.x;
             physics.dy = reflected.y;
