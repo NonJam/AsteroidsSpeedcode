@@ -1,5 +1,8 @@
 mod components;
 mod systems;
+pub mod consts;
+
+pub use consts::*;
 
 use vermarine_lib::{
     shipyard::{
@@ -10,10 +13,8 @@ use vermarine_lib::{
         self,
         graphics::{
             self, 
-            DrawParams, 
             Color, 
         },
-        math::Vec2,
         input::{
             self,
             get_mouse_position,
@@ -27,7 +28,8 @@ use vermarine_lib::{
         Trans,
     },
     physics::{
-        physics_workload,
+        PhysicsWorkloadCreator,
+        PhysicsWorkloadSystems,
         PhysicsBody,
         CollisionBody,
         Collider,
@@ -37,9 +39,13 @@ use vermarine_lib::{
         }
     },
     rendering::{
-        Renderables,
-        render_renderables,
+        Drawables,
         Sprite,
+        RenderingWorkloadCreator,
+        RenderingWorkloadSystems,
+        draw_buffer::{
+            DrawBuffer,
+        }
     },
 };
 
@@ -49,21 +55,7 @@ use rand::SeedableRng;
 use components::*;
 use systems::*;
 
-type Res = Renderables;
-
-pub mod layers {
-    pub const PLAYER: u64 = 1;
-    pub const ENEMY: u64 = 1 << 1;
-    pub const ASTEROID: u64 = 1 << 2;
-    pub const BULLET_PLAYER: u64 = 1 << 3;
-    pub const BULLET_ENEMY: u64 = 1 << 4;
-    pub const WALL: u64 = 1 << 5;
-}
-
-pub mod textures {
-    pub const ASTEROID: &'static str = "asteroid";
-    pub const SQUARE: &'static str = "square";
-}
+type Res = Drawables;
 
 pub struct AsteroidGame {
     asteroid_timer: i32,
@@ -95,7 +87,7 @@ fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new, |ctx| Ok(Renderables::new(ctx)?))
+        .run(GameState::new, |ctx| Ok(Drawables::new(ctx)?))
 }
 
 struct GameState {
@@ -117,8 +109,14 @@ impl State<Res> for GameState {
     fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
-        let (bodies, physics_world, sprites) = self.world.borrow::<(View<PhysicsBody>, UniqueViewMut<PhysicsWorld>, ViewMut<Sprite>)>();
-        render_renderables::<Sprite>((resources, ctx), bodies, physics_world, sprites);
+
+        self.world.run_workload("Rendering");
+        let mut buffer = self.world.borrow::<UniqueViewMut<DrawBuffer>>();
+        buffer.flush(ctx, resources);
+
+        if input::is_key_down(ctx, Key::Z) {
+            buffer.debug_command_buffer();
+        }
 
         Ok(())
     }
@@ -129,8 +127,6 @@ impl GameState {
         let mut world = World::new();
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
-
-        physics_workload(&mut world);
 
         world
             .add_workload("Main")
@@ -147,6 +143,16 @@ impl GameState {
             .with_system(system!(player_damage))
             .with_system(system!(asteroid_damage))
             .with_system(system!(destroy_bullets))
+            .build();
+        
+        world
+            .add_physics_workload()
+            .with_physics_systems()
+            .build();
+
+        world
+            .add_rendering_workload()
+            .with_rendering_systems()
             .build();
 
         world.run(
@@ -166,7 +172,7 @@ impl GameState {
                         &mut players,
                     ),
                     (
-                        create_sprite(textures::SQUARE, 10.0, Color::rgb(0.0, 1.0, 0.0)),
+                        create_sprite(textures::SQUARE, 10.0, Color::rgb(0.0, 1.0, 0.0), draw_layers::PLAYER),
                         Health::new(3, 20, Some(Color::RED)),
                         Physics::default(),
                         Player {},
@@ -197,7 +203,7 @@ impl GameState {
 
                 // Stationary circle to take dmg from
                 let circle = entities.add_entity((&mut sprites, &mut physicses), (
-                    create_sprite(textures::ASTEROID, 40.0, Color::BLACK),
+                    create_sprite(textures::ASTEROID, 40.0, Color::BLACK, draw_layers::WALL),
                     Physics::default(),
                 ));
 
@@ -211,7 +217,7 @@ impl GameState {
 
                 // Stationary square to take dmg from
                 let square = entities.add_entity((&mut sprites, &mut physicses), (
-                    create_sprite(textures::SQUARE, 40.0, Color::BLACK),
+                    create_sprite(textures::SQUARE, 40.0, Color::BLACK, draw_layers::WALL),
                     Physics::default(),
                 ));
 
@@ -258,25 +264,6 @@ impl GameState {
             _ => return true,
         };
     }
-}
-
-fn get_renderables(
-    physics_bodies: View<PhysicsBody>,
-    sprites: View<Sprite>,
-    health: View<Health>,
-    physics_world: UniqueViewMut<PhysicsWorld>,
-) -> Vec<(Transform, Sprite, Option<Health>)> {
-    let mut output = vec![];
-    for (e, (_, renderable)) in (&physics_bodies, &sprites).iter().with_id() {
-        let health = if health.contains(e) {
-            Some(health.get(e).ok().unwrap().clone())
-        } else {
-            None
-        };
-        let transform = physics_world.transform(e);
-        output.push((*transform, *renderable, health));
-    }
-    output
 }
 
 struct DeadState;

@@ -16,7 +16,7 @@ use vermarine_lib::{
     },
     rendering::{
         Sprite,
-    }
+    },
 };
 
 use rand::rngs::StdRng;
@@ -27,6 +27,7 @@ use crate::{
     layers,
     textures,
     AsteroidGame,
+    draw_layers,
 };
 
 pub fn spawn_asteroids(
@@ -77,7 +78,7 @@ pub fn spawn_asteroids(
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
 
-        let bullet = entities.add_entity(
+        let asteroid = entities.add_entity(
             (
                 &mut physicses,
                 &mut sprites,
@@ -89,7 +90,7 @@ pub fn spawn_asteroids(
                     angle,
                     ..Physics::default()
                 },
-                create_sprite(textures::ASTEROID, radius, Color::BLACK),
+                create_sprite(textures::ASTEROID, radius, Color::rgb(0.3, 0.3, 0.3), draw_layers::ASTEROID),
                 Asteroid {},
 
             ),
@@ -98,7 +99,7 @@ pub fn spawn_asteroids(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            bullet, 
+            asteroid, 
             transform,
             CollisionBody::from_sensor(Collider::circle(
                 radius,
@@ -311,7 +312,7 @@ pub fn spawn_spinners(
                     angle,
                     ..Physics::default()
                 },
-                create_sprite(textures::ASTEROID, radius, Color::BLACK),
+                create_sprite(textures::ASTEROID, radius, Color::rgb(0.7, 0.0, 0.0), draw_layers::ENEMY),
             ),
         );
 
@@ -355,7 +356,7 @@ pub fn shoot_spinners(
                         angle: spinner.angle + i as f64 * 90f64,
                         ..Physics::default()
                     },
-                    create_sprite(textures::ASTEROID, 7.5, Color::rgb(0.8, 0.0, 0.0)),
+                    create_sprite(textures::ASTEROID, 7.5, Color::rgb(0.8, 0.0, 0.0), draw_layers::BULLET),
                 ), (
                     Transform {
                         ..*transform
@@ -448,7 +449,7 @@ pub fn player_input(
                     angle: game.shoot_angle,
                     ..Physics::default()
                 },
-                create_sprite(textures::ASTEROID, 10.0, Color::rgb(0.02, 0.24, 0.81)),
+                create_sprite(textures::ASTEROID, 10.0, Color::rgb(0.02, 0.24, 0.81), draw_layers::BULLET),
                 Bullet::new(Team::Player),
             ),
         );
@@ -463,7 +464,8 @@ pub fn player_input(
                 ..Transform::default()
             },
             CollisionBody::from_collider(
-                Collider::circle(
+                Collider::half_extents(
+                    10.0,
                     10.0,
                     layers::BULLET_PLAYER,
                     layers::WALL
@@ -493,24 +495,24 @@ pub fn player_damage(mut all_storages: AllStoragesViewMut) {
         if health.iframe_count > 0 {
             return;
         } else {
-            sprite.draw_params.color = Color::rgb(0.0, 1.0, 0.0);
+            sprite.0.color = Color::rgb(0.0, 1.0, 0.0);
         }
 
         for collision in body.sensors[0].overlapping.iter() {
             if collision.collision_layer2 & layers::ASTEROID > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
-                sprite.draw_params.color = Color::RED;
+                sprite.0.color = Color::RED;
                 break;
             } else if collision.collision_layer2 & layers::ENEMY > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
-                sprite.draw_params.color = Color::RED;
+                sprite.0.color = Color::RED;
                 break;
             } else if collision.collision_layer2 & layers::BULLET_ENEMY > 0 {
                 health.hp -= 1;
                 health.iframe_count = health.iframe_max;
-                sprite.draw_params.color = Color::RED;
+                sprite.0.color = Color::RED;
                 kill.push(collision.entity2);
                 break;
             }
@@ -556,7 +558,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 if collision.collision_layer2 & layers::BULLET_PLAYER > 0 {
                     kill.push(collision.entity2);
 
-                    sprite.draw_params.scale /= 1.5;
+                    sprite.0.scale /= 1.5;
 
                     match body.sensors[0].shape {
                         CollisionShape::Circle(r) => {
@@ -609,7 +611,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 ),
                 (
                     Asteroid {},
-                    create_sprite(textures::ASTEROID, collision_body.sensors[0].shape.get_width() / 2.0, Color::BLACK),
+                    create_sprite(textures::ASTEROID, collision_body.sensors[0].shape.get_width() / 2.0, Color::rgb(0.3, 0.3, 0.3), draw_layers::ASTEROID),
                     physics,
                 ),
             );

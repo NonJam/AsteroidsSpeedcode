@@ -1,8 +1,16 @@
-use tetra::graphics::{Color, DrawParams};
+use tetra::graphics::{
+    Color
+};
 use tetra::math::Vec2;
-use vermarine_lib::*;
-use vermarine_lib::rendering::Sprite;
-use crate::textures;
+use vermarine_lib::{
+    *,
+    rendering:: {
+        Sprite,
+        draw_buffer::{
+            DrawCommand,
+        },
+    },
+};
 
 //
 // Health
@@ -42,13 +50,15 @@ impl Health {
 //
 // sprite creator
 
-pub fn create_sprite(texture: &'static str, radius: f64, color: Color) -> Sprite {
+pub fn create_sprite(texture: &'static str, radius: f64, color: Color, draw_layer: f32) -> Sprite {
     let scale = (radius / 1024.0 * 2.0) as f32;
-    let params = DrawParams::new()
+    Sprite::from_command(
+        DrawCommand::new(texture)
         .scale(Vec2::new(scale, scale))
         .origin(Vec2::new(512.0, 512.0))
-        .color(color);
-    Sprite::new(texture, params)
+        .color(color)
+        .draw_layer(draw_layer)
+    )
 }
 
 //
