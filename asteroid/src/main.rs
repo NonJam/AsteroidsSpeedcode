@@ -13,11 +13,11 @@ use vermarine_lib::{
         self,
         graphics::{
             self, 
-            Color, 
+            Color,
+            Camera,
         },
         input::{
             self,
-            get_mouse_position,
             Key,
             MouseButton,
         },
@@ -111,8 +111,8 @@ impl State<Res> for GameState {
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
 
         self.world.run_workload("Rendering");
-        let mut buffer = self.world.borrow::<UniqueViewMut<DrawBuffer>>();
-        buffer.flush(ctx, resources);
+        let (mut buffer, mut camera) = self.world.borrow::<(UniqueViewMut<DrawBuffer>, UniqueViewMut<Camera>)>();
+        buffer.flush(ctx, resources, &mut *camera);
 
         if input::is_key_down(ctx, Key::Z) {
             buffer.debug_command_buffer();
@@ -123,10 +123,15 @@ impl State<Res> for GameState {
 }
 
 impl GameState {
-    fn new(_ctx: &mut Context) -> Result<GameState> {
+    fn new(ctx: &mut Context) -> Result<GameState> {
         let mut world = World::new();
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
+        world.add_unique(Camera::with_window_size(ctx));
+
+        world.run(|mut camera: UniqueViewMut<Camera>| {
+            camera.zoom = 1.0;
+        });
 
         world
             .add_workload("Main")
@@ -143,10 +148,11 @@ impl GameState {
             .with_system(system!(player_damage))
             .with_system(system!(asteroid_damage))
             .with_system(system!(destroy_bullets))
+            //.with_system(system!(move_camera))
             .build();
         
         world
-            .add_physics_workload()
+            .add_physics_workload(20.0, 20.0)
             .with_physics_systems()
             .build();
 
@@ -183,7 +189,7 @@ impl GameState {
                     &mut entities,
                     &mut physics_bodies,
                     player, 
-                    Transform::new(640f64, 360f64),
+                    Transform::new(0.0, 0.0),
                     CollisionBody::from_parts(
                         // Collider
                         vec![Collider::half_extents(
@@ -211,7 +217,7 @@ impl GameState {
                     &mut entities,
                     &mut physics_bodies,
                     circle, 
-                    Transform::new(200.0, 200.0),
+                    Transform::new(-440.0, -160.0),
                     CollisionBody::from_collider(Collider::circle(40.0, layers::WALL, 0))
                 );
 
@@ -225,7 +231,7 @@ impl GameState {
                     &mut entities,
                     &mut physics_bodies,
                     square, 
-                    Transform::new(800.0, 200.0),
+                    Transform::new(160.0, -160.0),
                     CollisionBody::from_collider(Collider::half_extents(40.0, 40.0, layers::WALL, 0))
                 );
             },
@@ -235,26 +241,32 @@ impl GameState {
     }
 
     fn handle_input(&mut self, ctx: &Context) {
-        let (mut game, physics_bodies, players, physics_world) =
-            self.world
-                .borrow::<(UniqueViewMut<AsteroidGame>, View<PhysicsBody>, View<Player>, UniqueViewMut<PhysicsWorld>)>();
-        game.move_right = input::is_key_down(ctx, Key::D);
-        game.move_left = input::is_key_down(ctx, Key::A);
-        game.move_up = input::is_key_down(ctx, Key::W);
-        game.move_down = input::is_key_down(ctx, Key::S);
-        game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
-        if game.lmb_down {
-            let body = match (&physics_bodies, &players).iter().with_id().next() {
-                Some((id, _)) => id,
-                _ => return,
-            };
+        self.world.run_with_data(|
+            ctx: &Context,
+            mut game: UniqueViewMut<AsteroidGame>, 
+            physics_bodies: View<PhysicsBody>,
+            players: View<Player>, 
+            physics_world: UniqueView<PhysicsWorld>,
+            camera: UniqueView<Camera>, | {
+                game.move_right = input::is_key_down(ctx, Key::D);
+                game.move_left = input::is_key_down(ctx, Key::A);
+                game.move_up = input::is_key_down(ctx, Key::W);
+                game.move_down = input::is_key_down(ctx, Key::S);
+                game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
+                if game.lmb_down {
+                    let body = match (&physics_bodies, &players).iter().with_id().next() {
+                        Some((id, _)) => id,
+                        _ => return,
+                    };
+        
+                    let transform = physics_world.transform(body);
+        
+                    let pos = camera.mouse_position(ctx);
 
-            let transform = physics_world.transform(body);
-
-            let pos = get_mouse_position(ctx);
-            let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
-            game.shoot_angle = angle;
-        }
+                    let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
+                    game.shoot_angle = angle;
+                }
+            }, ctx);
     }
 
     fn player_is_dead(&self) -> bool {

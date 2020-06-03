@@ -1,7 +1,10 @@
 use vermarine_lib::{
     shipyard::*,
     tetra::{
-        graphics::Color,
+        graphics::{
+            Color,
+            Camera,
+        },
         math::Vec2,
     },
     physics::{
@@ -52,29 +55,29 @@ pub fn spawn_asteroids(
             if rand::random() {(
                 // Left
                 if rand::random() {
-                    0f64 - radius
+                    -640.0 - radius
                 }
                 // Right
                 else {
-                    1279f64 + radius
+                    640.0 + radius
                 },
-                rand.gen_range(0f64 - radius, 720f64 + radius),
+                rand.gen_range(-360.0 - radius, 360.0 + radius),
             )}
             // Align horizontally
             else {(
-                rand.gen_range(0f64 - radius, 1280f64 + radius),
+                rand.gen_range(-640.0 - radius, 640.0 + radius),
                 // Top
                 if rand::random() {
-                    0f64 - radius
+                    -360.0 - radius
                 }
                 // Bottom
                 else {
-                    719f64 + radius
+                    360.0 + radius
                 },
             )};
 
         let transform = Transform::new(x as f64, y as f64);
-        let mut angle = transform.get_angle_to(640f64, 360f64);
+        let mut angle = transform.get_angle_to(0.0, 0.0);
         angle += rand.gen_range(-22f64, 22f64);
         let speed = rand.gen_range(5f64, 10f64);
 
@@ -176,27 +179,7 @@ pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<
     physics_world.sync(&mut physics_bodies);
     
     for (id, _) in (&physics_bodies, &asteroids).iter().with_id() {
-        let (asteroid, collision_body) = physics_world.parts(id);
-        let r = collision_body.sensors[0].shape.get_width() / 2.0;
-
-        // Wrap X
-        if asteroid.x > 1280f64 + r {
-            let x = -(asteroid.x - 1280f64);
-            physics_world.move_body_to_x(id, x);
-        } else if asteroid.x < -r {
-            let x = 1280f64 + (-asteroid.x);
-            physics_world.move_body_to_x(id, x);
-        }
-
-        let asteroid = physics_world.transform(id);
-        // Wrap Y
-        if asteroid.y > 720f64 + r {
-            let y = -(asteroid.y - 720f64);
-            physics_world.move_body_to_y(id, y);
-        } else if asteroid.y < 0f64 - r {
-            let y = 720f64 + (-asteroid.y);
-            physics_world.move_body_to_y(id, y);
-        }
+        wrap_body(&mut physics_world, id);
     }
 }
 
@@ -204,27 +187,33 @@ pub fn wrap_player(mut physics_bodies: ViewMut<PhysicsBody>, players: View<Playe
     physics_world.sync(&mut physics_bodies);
 
     for (id, _) in (&physics_bodies, &players).iter().with_id() {
-        let (player, collision_body) = physics_world.parts(id);
-        let r = collision_body.sensors[0].shape.get_width() / 2.0;
+        wrap_body(&mut physics_world, id);
+    }
+}
 
-        // Wrap X
-        if player.x > 1280f64 + r {
-            let x = -(player.x - 1280f64);
-            physics_world.move_body_to_x(id, x);
-        } else if player.x < -r {
-            let x = 1280f64 + (-player.x);
-            physics_world.move_body_to_x(id, x);
-        }
+pub fn wrap_body(physics_world: &mut UniqueViewMut<PhysicsWorld>, id: EntityId) {
+    let (t, collision_body) = physics_world.parts(id);
+    let r = collision_body.sensors[0].shape.get_width() / 2.0;
 
-        let player = physics_world.transform(id);
-        // Wrap Y
-        if player.y > 720f64 + r {
-            let y = -(player.y - 720f64);
-            physics_world.move_body_to_y(id, y);
-        } else if player.y < 0f64 - r {
-            let y = 720f64 + (-player.y);
-            physics_world.move_body_to_y(id, y);
-        }
+    let buffer = 20.0;
+
+    // Wrap X
+    if t.x > 640.0 + r + buffer {
+        let x = -t.x + buffer;
+        physics_world.move_body_to_x(id, x);
+    } else if t.x < -640.0 - r - buffer {
+        let x = -t.x - buffer;
+        physics_world.move_body_to_x(id, x);
+    }
+
+    let t = physics_world.transform(id);
+    // Wrap Y
+    if t.y > 360.0 + r + buffer {
+        let y = -t.y + buffer;
+        physics_world.move_body_to_y(id, y);
+    } else if t.y < -360.0 - r - buffer {
+        let y = -t.y - buffer;
+        physics_world.move_body_to_y(id, y);
     }
 }
 
@@ -237,10 +226,10 @@ pub fn destroy_offscreen(mut all_storages: AllStoragesViewMut) {
 
         for (e, _) in (&physics_bodies).iter().with_id().filter(|(e, _)| {
             let transform = physics_world.transform(*e);
-            transform.x < -1000f64
-                || transform.x > 2280f64
-                || transform.y < -1000f64
-                || transform.y > 1720f64
+            transform.x < -1000.0
+                || transform.x > 1000.0
+                || transform.y < -600.0
+                || transform.y > 600.0
         }) {
             deferred.push(e);
         }
@@ -275,24 +264,24 @@ pub fn spawn_spinners(
             if rand::random() {(
                 // Left
                 if rand::random() {
-                    0f64 - radius
+                    -640.0 - radius
                 }
                 // Right
                 else {
-                    1279f64 + radius
+                    640.0 + radius
                 },
-                rand.gen_range(0f64 - radius, 720f64 + radius),
+                rand.gen_range(-360.0 - radius, 360.0 + radius),
             )}
             // Align horizontally
             else {(
-                rand.gen_range(0f64 - radius, 1280f64 + radius),
+                rand.gen_range(-640.0 - radius, 640.0 + radius),
                 // Top
                 if rand::random() {
-                    0f64 - radius
+                    -360.0 - radius
                 }
                 // Bottom
                 else {
-                    719f64 + radius
+                    360.0 + radius
                 },
             )};
 
@@ -655,5 +644,12 @@ pub fn destroy_bullets(mut all_storages: AllStoragesViewMut) {
 
     for id in to_kill.into_iter() {
         all_storages.delete(id);
+    }
+}
+
+pub fn move_camera(player: View<Player>, mut camera: UniqueViewMut<Camera>, physics_bodies: View<PhysicsBody>, physics_world: UniqueView<PhysicsWorld>) {
+    for (id, _) in (&player, &physics_bodies).iter().with_id() {
+        let t = physics_world.transform(id);
+        camera.position = Vec2::new(t.x as f32, t.y as f32);
     }
 }
