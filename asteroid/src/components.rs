@@ -117,11 +117,13 @@ pub enum Team {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bullet {
     pub team: Team,
+    pub bounces: u32,
+    pub bounce_limit: u32,
 }
 
 impl Bullet {
     pub fn new(team: Team) -> Self {
-        Bullet { team: team }
+        Bullet { team: team, bounces: 0, bounce_limit: 3, }
     }
 }
 

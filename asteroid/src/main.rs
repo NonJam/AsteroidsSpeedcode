@@ -21,6 +21,9 @@ use vermarine_lib::{
             Key,
             MouseButton,
         },
+        math::{
+            Vec2,
+        },
         Context,
         ContextBuilder,
         Result,
@@ -44,8 +47,9 @@ use vermarine_lib::{
         RenderingWorkloadCreator,
         RenderingWorkloadSystems,
         draw_buffer::{
+            DrawCommand,
             DrawBuffer,
-        }
+        },
     },
 };
 
@@ -143,16 +147,15 @@ impl GameState {
             .with_system(system!(apply_physics))
             .with_system(system!(move_player_bullets))
             .with_system(system!(wrap_asteroids))
-            .with_system(system!(wrap_player))
             .with_system(system!(destroy_offscreen))
             .with_system(system!(player_damage))
             .with_system(system!(asteroid_damage))
             .with_system(system!(destroy_bullets))
-            //.with_system(system!(move_camera))
+            .with_system(system!(move_camera))
             .build();
         
         world
-            .add_physics_workload(20.0, 20.0)
+            .add_physics_workload(50.0, 50.0)
             .with_physics_systems()
             .build();
 
@@ -206,35 +209,24 @@ impl GameState {
                             layers::ENEMY | layers::BULLET_ENEMY | layers::ASTEROID,
                         )]),
                 );
-
-                // Stationary circle to take dmg from
-                let circle = entities.add_entity((&mut sprites, &mut physicses), (
-                    create_sprite(textures::ASTEROID, 40.0, Color::BLACK, draw_layers::WALL),
-                    Physics::default(),
-                ));
-
-                physics_world.create_body(
-                    &mut entities,
-                    &mut physics_bodies,
-                    circle, 
-                    Transform::new(-440.0, -160.0),
-                    CollisionBody::from_collider(Collider::circle(40.0, layers::WALL, 0))
-                );
-
-                // Stationary square to take dmg from
-                let square = entities.add_entity((&mut sprites, &mut physicses), (
-                    create_sprite(textures::SQUARE, 40.0, Color::BLACK, draw_layers::WALL),
-                    Physics::default(),
-                ));
-
-                physics_world.create_body(
-                    &mut entities,
-                    &mut physics_bodies,
-                    square, 
-                    Transform::new(160.0, -160.0),
-                    CollisionBody::from_collider(Collider::half_extents(40.0, 40.0, layers::WALL, 0))
-                );
             },
+        );
+
+        world.run_with_data(
+            create_wall,
+            (-1020.0, 0.0, 20.0, 540.0),
+        );
+        world.run_with_data(
+            create_wall,
+            (1020.0, 0.0, 20.0, 540.0),
+        );
+        world.run_with_data(
+            create_wall,
+            (0.0, -520.0, 1040.0, 20.0),
+        );
+        world.run_with_data(
+            create_wall,
+            (0.0, 520.0, 1040.0, 20.0),
         );
 
         Ok(GameState { world })
@@ -294,4 +286,36 @@ impl State<Res> for DeadState {
 
         Ok(())
     }
+}
+
+fn create_wall(
+    data: (f64, f64, f64, f64),
+    mut entities: EntitiesViewMut, 
+    mut sprites: ViewMut<Sprite>, 
+    mut physicses: ViewMut<Physics>, 
+    mut physics_world: UniqueViewMut<PhysicsWorld>, 
+    mut physics_bodies: ViewMut<PhysicsBody>) 
+    {
+        let (pos_x, pos_y, scale_x, scale_y) = data;
+
+        // Stationary square
+        let scale_calc = |s: f64| { (s / 1024.0 * 2.0) as f32 };
+        let square = entities.add_entity((&mut sprites, &mut physicses), (
+            Sprite::from_command(
+                DrawCommand::new(textures::SQUARE)
+                .scale(Vec2::new(scale_calc(scale_x), scale_calc(scale_y)))
+                .origin(Vec2::new(512.0, 512.0))
+                .color(Color::BLACK)
+                .draw_layer(draw_layers::WALL)
+            ),
+            Physics::default(),
+        ));
+
+        physics_world.create_body(
+            &mut entities,
+            &mut physics_bodies,
+            square, 
+            Transform::new(pos_x, pos_y),
+            CollisionBody::from_collider(Collider::half_extents(scale_x, scale_y, layers::WALL, 0))
+        );
 }
