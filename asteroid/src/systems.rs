@@ -12,10 +12,12 @@ use vermarine_lib::{
         CollisionBody,
         Collider,
         CollisionShape,
-        Transform,
         world::{
             PhysicsWorld,
         },
+    },
+    components::{
+        Transform,
     },
     rendering::{
         Sprite,
@@ -176,6 +178,7 @@ pub fn spawn_asteroids(
     mut asteroids: ViewMut<Asteroid>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
+    mut transforms: ViewMut<Transform>,
 ) {
     game.asteroid_timer += 1;
     while game.asteroid_timer > 25 {
@@ -242,7 +245,8 @@ pub fn spawn_asteroids(
         physics_world.create_body(
             &mut entities, 
             &mut physics_bodies, 
-            asteroid, 
+            asteroid,
+            &mut transforms,
             transform,
             CollisionBody::from_sensor(Collider::circle(
                 radius,
@@ -263,6 +267,7 @@ pub fn spawn_spinners(
     mut sprites: ViewMut<Sprite>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
+    mut transforms: ViewMut<Transform>,
 ) {
     game.spinner_timer += 1;
     while game.spinner_timer > 400 {
@@ -331,7 +336,8 @@ pub fn spawn_spinners(
             &mut entities, 
             &mut physics_bodies, 
             spinner, 
-            transform, 
+            &mut transforms,
+            transform,
             CollisionBody::from_sensor(Collider::circle(radius, layers::ENEMY, 0)),
     )
     }
@@ -345,6 +351,7 @@ pub fn shoot_spinners(
     mut sprites: ViewMut<Sprite>,
     mut physics_bodies: ViewMut<PhysicsBody>,
     mut physics_world: UniqueViewMut<PhysicsWorld>,
+    mut transforms: ViewMut<Transform>,
 ) {
     let mut deferred = vec![];
     physics_world.sync(&mut physics_bodies);
@@ -392,6 +399,7 @@ pub fn shoot_spinners(
             &mut entities, 
             &mut physics_bodies, 
             bullet, 
+            &mut transforms,
             (data.1).0, 
             (data.1).1,
         );
@@ -417,6 +425,7 @@ pub fn player_input(
     mut physicses: ViewMut<Physics>,
     mut sprites: ViewMut<Sprite>,
     mut bullets: ViewMut<Bullet>,
+    mut transforms: ViewMut<Transform>,
 ) {
     physics_world.sync(&mut physics_bodies);
     
@@ -487,6 +496,7 @@ pub fn player_input(
             &mut entities, 
             &mut physics_bodies, 
             bullet, 
+            &mut transforms,
             Transform {
                 x: pos.x,
                 y: pos.y,
@@ -617,6 +627,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
     {
         let (
             mut entities,
+            mut transforms,
             mut asteroids,
             mut sprites,
             mut physicses,
@@ -624,6 +635,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
             mut physics_world,
         ) = all_storages.borrow::<(
             EntitiesViewMut,
+            ViewMut<Transform>,
             ViewMut<Asteroid>,
             ViewMut<Sprite>,
             ViewMut<Physics>,
@@ -648,6 +660,7 @@ pub fn asteroid_damage(mut all_storages: AllStoragesViewMut) {
                 &mut entities,
                 &mut physics_bodies,
                 splitted,
+                &mut transforms,
                 transform,
                 collision_body,
             );

@@ -36,10 +36,12 @@ use vermarine_lib::{
         PhysicsBody,
         CollisionBody,
         Collider,
-        Transform,
         world::{
             PhysicsWorld,
         }
+    },
+    components::{
+        Transform,
     },
     rendering::{
         Drawables,
@@ -115,12 +117,7 @@ impl State<Res> for GameState {
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
 
         self.world.run_workload("Rendering");
-        let (mut buffer, mut camera) = self.world.borrow::<(UniqueViewMut<DrawBuffer>, UniqueViewMut<Camera>)>();
-        buffer.flush(ctx, resources, &mut *camera);
-
-        if input::is_key_down(ctx, Key::Z) {
-            buffer.debug_command_buffer();
-        }
+        self.world.run_with_data(DrawBuffer::flush, (ctx, resources));
 
         Ok(())
     }
@@ -160,7 +157,7 @@ impl GameState {
             .build();
 
         world
-            .add_rendering_workload()
+            .add_rendering_workload(ctx)
             .with_rendering_systems()
             .build();
 
@@ -171,7 +168,8 @@ impl GameState {
              mut physicses: ViewMut<Physics>,
              mut players: ViewMut<Player>,
              mut physics_bodies: ViewMut<PhysicsBody>,
-             mut physics_world: UniqueViewMut<PhysicsWorld>| {
+             mut physics_world: UniqueViewMut<PhysicsWorld>,
+             mut transforms: ViewMut<Transform>, | {
                 // Player
                 let player = entities.add_entity(
                     (
@@ -191,7 +189,8 @@ impl GameState {
                 physics_world.create_body(
                     &mut entities,
                     &mut physics_bodies,
-                    player, 
+                    player,
+                    &mut transforms,
                     Transform::new(0.0, 0.0),
                     CollisionBody::from_parts(
                         // Collider
@@ -294,7 +293,8 @@ fn create_wall(
     mut sprites: ViewMut<Sprite>, 
     mut physicses: ViewMut<Physics>, 
     mut physics_world: UniqueViewMut<PhysicsWorld>, 
-    mut physics_bodies: ViewMut<PhysicsBody>) 
+    mut physics_bodies: ViewMut<PhysicsBody>,
+    mut transforms: ViewMut<Transform>, ) 
     {
         let (pos_x, pos_y, scale_x, scale_y) = data;
 
@@ -314,7 +314,8 @@ fn create_wall(
         physics_world.create_body(
             &mut entities,
             &mut physics_bodies,
-            square, 
+            square,
+            &mut transforms,
             Transform::new(pos_x, pos_y),
             CollisionBody::from_collider(Collider::half_extents(scale_x, scale_y, layers::WALL, 0))
         );
