@@ -107,14 +107,6 @@ pub fn wrap_asteroids(mut physics_bodies: ViewMut<PhysicsBody>, asteroids: View<
     }
 }
 
-pub fn wrap_player(mut physics_bodies: ViewMut<PhysicsBody>, players: View<Player>, mut physics_world: UniqueViewMut<PhysicsWorld>) {
-    physics_world.sync(&mut physics_bodies);
-
-    for (id, _) in (&physics_bodies, &players).iter().with_id() {
-        wrap_body(&mut physics_world, id);
-    }
-}
-
 pub fn wrap_body(physics_world: &mut UniqueViewMut<PhysicsWorld>, id: EntityId) {
     let (t, collision_body) = physics_world.parts(id);
     let r = collision_body.sensors[0].shape.get_width() / 2.0;
