@@ -27,8 +27,6 @@ use vermarine_lib::{
         Context,
         ContextBuilder,
         Result,
-        State,
-        Trans,
     },
     physics::{
         PhysicsWorkloadCreator,
@@ -53,6 +51,11 @@ use vermarine_lib::{
             DrawBuffer,
         },
     },
+    pushdown_automaton_state::{
+        PushdownAutomaton,
+        PDAState,
+        Trans,
+    },
 };
 
 use rand::rngs::StdRng;
@@ -61,7 +64,6 @@ use rand::SeedableRng;
 use components::*;
 use systems::*;
 
-type Res = Drawables;
 
 pub struct AsteroidGame {
     asteroid_timer: i32,
@@ -89,18 +91,19 @@ impl AsteroidGame {
     }
 }
 
+type Res = Drawables;
 fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new, |ctx| Ok(Drawables::new(ctx)))
+        .run(|ctx| PushdownAutomaton::new(ctx, GameState::new, Drawables::new))
 }
 
 struct GameState {
     world: World,
 }
 
-impl State<Res> for GameState {
+impl PDAState<Res> for GameState {
     fn update(&mut self, ctx: &mut Context, _: &mut Res) -> Result<Trans<Res>> {
         let input_ctx = ctx.input_context();
         self.world.run(|mut ctx: UniqueViewMut<InputContext>| {
@@ -133,12 +136,13 @@ impl State<Res> for GameState {
 }
 
 impl GameState {
-    fn new(ctx: &mut Context) -> Result<GameState> {
+    fn new(ctx: &mut Context, res: &mut Res) -> Result<GameState> {
         let mut world = World::new();
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
         world.add_unique(Camera::with_window_size(ctx));
         world.add_unique((*ctx.input_context()).clone());
+        world.add_unique_non_send_sync((*res).clone());
 
         world.run(|mut camera: UniqueViewMut<Camera>| {
             camera.zoom = 1.0;
@@ -282,10 +286,10 @@ impl GameState {
 
 struct DeadState;
 
-impl State<Res> for DeadState {
-    fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
+impl PDAState<Res> for DeadState {
+    fn update(&mut self, ctx: &mut Context, res: &mut Res) -> Result<Trans<Res>> {
         if input::is_key_down(ctx.input_context(), Key::Space) {
-            return Ok(Trans::Switch(Box::new(GameState::new(ctx)?)));
+            return Ok(Trans::Switch(Box::new(GameState::new(ctx, res)?)));
         }
 
         Ok(Trans::None)

@@ -344,79 +344,6 @@ pub fn spawn_spinners(
             )
         })
     }
-
-    /*game.spinner_timer += 1;
-    while game.spinner_timer > 400 {
-        physics_world.sync(&mut physics_bodies);
-
-        game.spinner_timer -= 400;
-
-        let left = -1300.0;
-        let right = 1300.0;
-        let top = -800.0;
-        let bottom = 800.0;
-        // Timer proc
-        let radius = 20f64;
-        let (x, y) =
-            // Align vertically
-            if rand::random() {(
-                // Left
-                if rand::random() {
-                    left - radius
-                }
-                // Right
-                else {
-                    right + radius
-                },
-                rand.gen_range(top / 2.0 - radius, bottom / 2.0 + radius),
-            )}
-            // Align horizontally
-            else {(
-                rand.gen_range(left / 2.0 - radius, right / 2.0 + radius),
-                // Top
-                if rand::random() {
-                    top - radius
-                }
-                // Bottom
-                else {
-                    bottom + radius
-                },
-            )};
-
-        let body = match (&physics_bodies, &players).iter().with_id().next() {
-            Some((id, _)) => id,
-            _ => return,
-        };
-        let player = physics_world.transform(body);
-
-        let transform = Transform::new(x as f64, y as f64);
-        let angle = transform.get_angle_to(player.x, player.y);
-        let spinner = entities.add_entity(
-            (
-                &mut spinners,
-                &mut physicses,
-                &mut sprites,
-            ),
-            (
-                Spinner { angle, cooldown: 0 },
-                Physics {
-                    accel: 0.18f64,
-                    angle,
-                    ..Physics::default()
-                },
-                create_sprite(drawables.alias[textures::ASTEROID], radius, Color::rgb(0.7, 0.0, 0.0), draw_layers::ENEMY),
-            ),
-        );
-
-        physics_world.create_body(
-            &mut entities, 
-            &mut physics_bodies, 
-            spinner, 
-            &mut transforms,
-            transform,
-            CollisionBody::from_sensor(Collider::circle(radius, layers::ENEMY, 0)),
-    )
-    }*/
 }
 
 pub fn shoot_spinners(
@@ -493,7 +420,7 @@ pub fn iframe_counter(mut healths: ViewMut<Health>) {
 }
 
 pub fn player_input(
-    mut all_storages: AllStoragesViewMut,
+    all_storages: AllStoragesViewMut,
 ) {
     let (
         drawables,
@@ -519,7 +446,7 @@ pub fn player_input(
         ViewMut<Transform>,
     )>();
 
-    let (game) = all_storages.borrow::<UniqueView<AsteroidGame>>();
+    let game = all_storages.borrow::<UniqueView<AsteroidGame>>();
 
     physics_world.sync(&mut physics_bodies);
     
