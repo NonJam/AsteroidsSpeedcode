@@ -6,7 +6,6 @@ pub use consts::*;
 
 use vermarine_lib::{
     shipyard::{
-        self,
         *,
     },
     tetra::{
@@ -20,6 +19,7 @@ use vermarine_lib::{
             self,
             Key,
             MouseButton,
+            InputContext,
         },
         math::{
             Vec2,
@@ -93,7 +93,7 @@ fn main() -> tetra::Result {
     ContextBuilder::new("Asteroids", 1280, 720)
         .show_mouse(true)
         .build()?
-        .run(GameState::new, |ctx| Ok(Drawables::new(ctx)?))
+        .run(GameState::new, |ctx| Ok(Drawables::new(ctx)))
 }
 
 struct GameState {
@@ -102,7 +102,12 @@ struct GameState {
 
 impl State<Res> for GameState {
     fn update(&mut self, ctx: &mut Context, _: &mut Res) -> Result<Trans<Res>> {
-        self.handle_input(ctx);
+        let input_ctx = ctx.input_context();
+        self.world.run(|mut ctx: UniqueViewMut<InputContext>| {
+            *ctx = (*input_ctx).clone();
+        });
+
+        self.handle_input();
         self.world.run_workload("Main");
         self.world.run_workload("Physics");
 
@@ -112,12 +117,16 @@ impl State<Res> for GameState {
         Ok(Trans::None)
     }
 
-    fn draw(&mut self, ctx: &mut Context, resources: &mut Res) -> Result {
+    fn draw(&mut self, ctx: &mut Context, _: &mut Res) -> Result {
         // Cornflower blue, as is tradition
         graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
 
         self.world.run_workload("Rendering");
-        self.world.run_with_data(DrawBuffer::flush, (ctx, resources));
+        self.world.run(|mut draw_buff: UniqueViewMut<DrawBuffer>, mut camera: UniqueViewMut<Camera>| {
+            camera.update();
+            draw_buff.transform_mat = camera.as_matrix();
+        });
+        self.world.run_with_data(DrawBuffer::flush, ctx);
 
         Ok(())
     }
@@ -129,6 +138,7 @@ impl GameState {
         world.add_unique(AsteroidGame::new(50i32, 50i32));
         world.add_unique(StdRng::from_entropy());
         world.add_unique(Camera::with_window_size(ctx));
+        world.add_unique((*ctx.input_context()).clone());
 
         world.run(|mut camera: UniqueViewMut<Camera>| {
             camera.zoom = 1.0;
@@ -162,14 +172,15 @@ impl GameState {
             .build();
 
         world.run(
-            |mut entities: EntitiesViewMut,
-             mut sprites: ViewMut<Sprite>,
-             mut healths: ViewMut<Health>,
-             mut physicses: ViewMut<Physics>,
-             mut players: ViewMut<Player>,
-             mut physics_bodies: ViewMut<PhysicsBody>,
-             mut physics_world: UniqueViewMut<PhysicsWorld>,
-             mut transforms: ViewMut<Transform>, | {
+            |drawables: NonSendSync<UniqueView<Drawables>>,
+            mut entities: EntitiesViewMut,
+            mut sprites: ViewMut<Sprite>,
+            mut healths: ViewMut<Health>,
+            mut physicses: ViewMut<Physics>,
+            mut players: ViewMut<Player>,
+            mut physics_bodies: ViewMut<PhysicsBody>,
+            mut physics_world: UniqueViewMut<PhysicsWorld>,
+            mut transforms: ViewMut<Transform>, | {
                 // Player
                 let player = entities.add_entity(
                     (
@@ -179,7 +190,7 @@ impl GameState {
                         &mut players,
                     ),
                     (
-                        create_sprite(textures::SQUARE, 10.0, Color::rgb(0.0, 1.0, 0.0), draw_layers::PLAYER),
+                        create_sprite(drawables.alias[textures::SQUARE], 10.0, Color::rgb(0.0, 1.0, 0.0), draw_layers::PLAYER),
                         Health::new(3, 20, Some(Color::RED)),
                         Physics::default(),
                         Player {},
@@ -231,19 +242,19 @@ impl GameState {
         Ok(GameState { world })
     }
 
-    fn handle_input(&mut self, ctx: &Context) {
-        self.world.run_with_data(|
-            ctx: &Context,
+    fn handle_input(&mut self) {
+        self.world.run(|
+            ctx: UniqueView<InputContext>,
             mut game: UniqueViewMut<AsteroidGame>, 
             physics_bodies: View<PhysicsBody>,
             players: View<Player>, 
             physics_world: UniqueView<PhysicsWorld>,
             camera: UniqueView<Camera>, | {
-                game.move_right = input::is_key_down(ctx, Key::D);
-                game.move_left = input::is_key_down(ctx, Key::A);
-                game.move_up = input::is_key_down(ctx, Key::W);
-                game.move_down = input::is_key_down(ctx, Key::S);
-                game.lmb_down = input::is_mouse_button_down(ctx, MouseButton::Left);
+                game.move_right = input::is_key_down(&ctx, Key::D);
+                game.move_left = input::is_key_down(&ctx, Key::A);
+                game.move_up = input::is_key_down(&ctx, Key::W);
+                game.move_down = input::is_key_down(&ctx, Key::S);
+                game.lmb_down = input::is_mouse_button_down(&ctx, MouseButton::Left);
                 if game.lmb_down {
                     let body = match (&physics_bodies, &players).iter().with_id().next() {
                         Some((id, _)) => id,
@@ -252,12 +263,12 @@ impl GameState {
         
                     let transform = physics_world.transform(body);
         
-                    let pos = camera.mouse_position(ctx);
+                    let pos = camera.mouse_position(&ctx);
 
                     let angle = transform.get_angle_to(pos.x as f64, pos.y as f64);
                     game.shoot_angle = angle;
                 }
-            }, ctx);
+            });
     }
 
     fn player_is_dead(&self) -> bool {
@@ -273,7 +284,7 @@ struct DeadState;
 
 impl State<Res> for DeadState {
     fn update(&mut self, ctx: &mut Context, _resources: &mut Res) -> Result<Trans<Res>> {
-        if input::is_key_down(ctx, Key::Space) {
+        if input::is_key_down(ctx.input_context(), Key::Space) {
             return Ok(Trans::Switch(Box::new(GameState::new(ctx)?)));
         }
 
@@ -289,6 +300,7 @@ impl State<Res> for DeadState {
 
 fn create_wall(
     data: (f64, f64, f64, f64),
+    drawables: NonSendSync<UniqueView<Drawables>>,
     mut entities: EntitiesViewMut, 
     mut sprites: ViewMut<Sprite>, 
     mut physicses: ViewMut<Physics>, 
@@ -302,7 +314,7 @@ fn create_wall(
         let scale_calc = |s: f64| { (s / 1024.0 * 2.0) as f32 };
         let square = entities.add_entity((&mut sprites, &mut physicses), (
             Sprite::from_command(
-                DrawCommand::new(textures::SQUARE)
+                DrawCommand::new(drawables.alias[textures::SQUARE])
                 .scale(Vec2::new(scale_calc(scale_x), scale_calc(scale_y)))
                 .origin(Vec2::new(512.0, 512.0))
                 .color(Color::BLACK)

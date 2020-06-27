@@ -50,7 +50,7 @@ impl Health {
 //
 // sprite creator
 
-pub fn create_sprite(texture: &'static str, radius: f64, color: Color, draw_layer: f32) -> Sprite {
+pub fn create_sprite(texture: u64, radius: f64, color: Color, draw_layer: f32) -> Sprite {
     let scale = (radius / 1024.0 * 2.0) as f32;
     Sprite::from_command(
         DrawCommand::new(texture)
